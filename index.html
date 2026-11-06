@@ -1896,7 +1896,10 @@ const total=list=>list.reduce((a,e)=>a+e.n,0);
    ===================================================================== */
 let G=null;
 const SAVE='sukkradan_campaign_v1';
-function save(){try{localStorage.setItem(SAVE,JSON.stringify(G));}catch(e){}}
+function save(){
+  try{localStorage.setItem(SAVE,JSON.stringify(G));return true;}
+  catch(e){return false;}
+}
 function load(){try{const s=localStorage.getItem(SAVE);return s?JSON.parse(s):null;}catch(e){return null;}}
 function facOf(id){if(id==='p')return{id:'p',name:SIDE.blue.name,short:'เรา',color:G.gen.color};if(!id||id==='ind')return IND;return FACTIONS.find(f=>f.id===id)||IND;}
 function randomTroops(n,pool){const m={};for(let i=0;i<n;i++){const id=pickR(pool);m[id]=(m[id]||0)+1;}return Object.entries(m).map(([id,n])=>({id,n,w:0}));}
@@ -2589,7 +2592,7 @@ $('#bMenu').onclick=()=>{openSheet(`<h2>เมนู</h2><div class="list">
   <button class="btn" id="mNew" type="button">เริ่มเกมใหม่</button>
   </div><button class="btn gold" id="mClose" type="button">กลับไปเล่น</button>`);
   $('#mDip').onclick=openDiplo;
-  $('#mSave').onclick=()=>{save();toast('บันทึกแล้ว');};
+  $('#mSave').onclick=()=>{toast(save()?'บันทึกแล้ว':'บันทึกเกมไม่ได้ กรุณาลองอีกครั้ง');};
   $('#mNew').onclick=()=>{openSheet(`<h2>เริ่มเกมใหม่?</h2><p class="muted" style="margin:0">ความคืบหน้าทั้งหมดจะหายไป</p><div class="row"><button class="btn grow" id="nNo" type="button">ไม่</button><button class="btn gold grow" id="nYes" type="button">เริ่มใหม่</button></div>`);
     $('#nNo').onclick=closeSheet;$('#nYes').onclick=()=>{try{localStorage.removeItem(SAVE);}catch(e){}closeSheet();G=null;showTitle();};};
   $('#mClose').onclick=closeSheet;};
@@ -3685,8 +3688,11 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 window.addEventListener('resize',()=>{if(!$('#mapScreen').hidden)resizeMap();if(!$('#battleScreen').hidden&&phase==='deploy')resizeBoard();});
+function saveMapProgress(){if(G&&!$('#mapScreen').hidden)save();}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveMapProgress();});
+window.addEventListener('pagehide',saveMapProgress);
 window.__back=()=>{if(sheetOpen()){if(!$('#rBack')&&!$('#cTake')&&!$('#eFight')&&!$('#dDef')&&!$('#iOk'))closeSheet();return 'stay';}
-  if(!$('#titleScreen').hidden)return 'exit';if(!$('#mapScreen').hidden){if(G)save();return 'exit';}return 'stay';};
+  if(!$('#titleScreen').hidden)return 'exit';if(!$('#mapScreen').hidden){saveMapProgress();return 'exit';}return 'stay';};
 window.__dbg={get G(){return G;},w2s:(x,y)=>w2s(x,y),siege:n=>beginSiege(G.towns.find(t=>t.n===n)),defend:n=>{const t=G.towns.find(t=>t.n===n);t.own='p';t.gar=[{id:'arc',n:8,w:0},{id:'spr',n:10,w:0}];beginDefense(G.armies[0],t);},give:(id,n)=>addTroop(id,n),town:n=>openTown(G.towns.find(t=>t.n===n)),army:()=>openArmy(),day:()=>dailyTick(),get B(){return B;}};
 buildWorld();
 showTitle();
