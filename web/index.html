@@ -226,11 +226,12 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
 .city-resources{display:flex;flex-wrap:wrap;gap:4px 13px;padding:5px 9px;background:#12140f;border:1px solid #574b31;color:#d2c6a8;font-size:12px}
 .city-resources b{color:#f6da9c;margin-inline-start:2px}
 .city-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(164px,242px);gap:7px;align-items:stretch}
-.city-layout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:minmax(0,1fr) 16% minmax(0,1fr);min-height:288px;
+.city-layout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:minmax(0,1fr) 30% minmax(0,1fr);min-height:288px;
   padding:6px;overflow:hidden;border:1px solid #796746;border-radius:6px;background:linear-gradient(160deg,#72853a24,#2c321a40),url('./field.webp') center/cover,#5b673c}
-.city-road{background:#b29363;opacity:.88;border-block:1px solid #e0bb80;background-image:url('./terrain.webp');background-size:200% auto;background-position:left bottom;background-blend-mode:soft-light}
-.city-plot{position:relative;min-width:0;display:grid;place-items:center;padding:2px;border:1px solid #e7d89535;border-radius:2px;background:#28331d20;color:#f9e8be;font:inherit;cursor:pointer}
-.city-plot i{font-style:normal;color:#f1dfa36a;font-size:18px}
+.city-muster{grid-column:1/-1;width:100%;height:100%;object-fit:contain;min-height:0;pointer-events:none}
+.city-plot{position:relative;min-width:0;display:grid;place-items:center;padding:2px;border:1px solid transparent;border-radius:2px;background:transparent;color:#f9e8be;font:inherit;cursor:pointer}
+.city-plot i{display:none;font-style:normal;color:#f1dfa3;font-size:18px}
+.city-layout.placing .city-plot.placeable i{display:block}
 .city-plot.built{background:#20280e2e}
 .city-plot.working{background:repeating-linear-gradient(135deg,#8c632855 0 8px,#29190855 8px 15px);border:1px dashed #f7c672}
 .city-plot.working .city-sprite{opacity:.69}
@@ -2055,6 +2056,25 @@ const CAVES=[['north','ถ้ำผาแดง',98.82,19.4],['west','ถ้ำ�
 const WORLD_W=1080,WORLD_H=1860;
 const POLY=THAI.map(p=>W2(p[0],p[1]));
 const RIV_W=RIVERS.map(rv=>rv.map(p=>W2(p[0],p[1])));
+const RIVER_SEGMENTS=RIV_W.flatMap(points=>points.slice(1).map(([bx,by],i)=>{
+  const [ax,ay]=points[i],dx=bx-ax,dy=by-ay,length=Math.hypot(dx,dy);
+  return {ax,ay,bx,by,ux:dx/length,uy:dy/length,length,x:(ax+bx)/2,y:(ay+by)/2};
+}));
+const BRIDGE_HALF_WIDTH=8,BRIDGE_HALF_LENGTH=14,RIVER_HALF_WIDTH=4.5;
+function bridgeAt(x,y){
+  return RIVER_SEGMENTS.find(b=>Math.abs(x-b.x)<=18&&Math.abs(y-b.y)<=18&&
+    Math.abs((x-b.x)*b.ux+(y-b.y)*b.uy)<=BRIDGE_HALF_WIDTH&&
+    Math.abs((y-b.y)*b.ux-(x-b.x)*b.uy)<=BRIDGE_HALF_LENGTH);
+}
+function riverAt(x,y){
+  return RIVER_SEGMENTS.some(b=>{
+    if(x<Math.min(b.ax,b.bx)-5||x>Math.max(b.ax,b.bx)+5||y<Math.min(b.ay,b.by)-5||y>Math.max(b.ay,b.by)+5)return false;
+    const t=Math.max(0,Math.min(b.length,(x-b.ax)*b.ux+(y-b.ay)*b.uy));
+    return (x-b.ax-t*b.ux)**2+(y-b.ay-t*b.uy)**2<RIVER_HALF_WIDTH**2;
+  });
+}
+function canTravel(x,y){return onLand(x,y)&&(!riverAt(x,y)||!!bridgeAt(x,y));}
+
 function onLand(x,y){let ins=false;for(let i=0,j=POLY.length-1;i<POLY.length;j=i++){const[xi,yi]=POLY[i],[xj,yj]=POLY[j];
   if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}return ins;}
 
@@ -2124,7 +2144,13 @@ function newGame(name,color,emblem){
   terrDirty=true;save();
 }
 function upgradeSave(){if(!G.v){staticLinks();initWorld();}staticLinks();fixState();G.v=3;terrDirty=true;}
-function fixState(){if(G.x!=null&&!onLand(G.x,G.y))putOnLand(G);for(const p of G.parties||[])if(!onLand(p.x,p.y))putOnLand(p);const g=G.gen;if(!g.st)g.st={str:0,end:0,lead:0};if(g.pts==null)g.pts=(g.lv-1)*2;if(g.tr==null)g.tr=0;
+function fixState(){
+  if(G.navVersion!==1){
+    const actors=[G,...G.towns,...(G.parties||[]),...(G.bandits||[]),...(G.armies||[]),...(G.caves||[]),...(G.caravans||[])];
+    for(const actor of actors)if(!canTravel(actor.x,actor.y))putOnLand(actor);
+    G.path=null;G.navVersion=1;
+  }
+  const g=G.gen;if(!g.st)g.st={str:0,end:0,lead:0};if(g.pts==null)g.pts=(g.lv-1)*2;if(g.tr==null)g.tr=0;
   if(G.food==null)G.food=30;if(G.herb==null)G.herb=0;if(!G.eq)G.eq={arm:0,wpn:0};if(!G.gear)G.gear={wpn:0,arm:0,horse:0};if(!G.drill)G.drill={};
   G.goods??={};G.caravans??=[];G.nextConvoy??=1;
   G.caves??=CAVES.map(([id,n,lon,lat])=>{const [x,y]=toLand(...W2(lon,lat));return{id,n,x,y,clearDay:0};});
@@ -2168,7 +2194,7 @@ function spawnBandit(cx,cy,rmin,rmax,size){
   let x,y,tries=0;
   do{if(cx!=null){const a=Math.random()*6.28,r=rnd(rmin,rmax);x=cx+Math.cos(a)*r;y=cy+Math.sin(a)*r;}
      else{x=rnd(0,WORLD_W);y=rnd(0,WORLD_H);}tries++;}
-  while(tries<300&&(!onLand(x,y)||G.towns.some(t=>Math.hypot(t.x-x,t.y-y)<40)||Math.hypot(G.x-x,G.y-y)<70));
+  while(tries<300&&(!canTravel(x,y)||G.towns.some(t=>Math.hypot(t.x-x,t.y-y)<40)||Math.hypot(G.x-x,G.y-y)<70));
   if(tries>=300)return;
   const lvl=G.gen.lv;
   const mountain=size==null&&mtnP(20.9-y/120,97+x/120)>=.5;
@@ -2185,7 +2211,8 @@ function spawnArmy(fac){
   const n=Math.round(rnd(18,30)+G.day*.45);
   const pool=['rsp','rsw','hun','rsp','rsw','spr','swd','arc','shd','lcv'].concat(G.day>12?['gun','gun']:[],G.day>25?['spr4','swd4','arc4','cav4','gun4']:[]);
   const extra=G.day>20&&Math.random()<.5?[{id:Math.random()<.5?'can':'cat',n:1,w:0}]:[];
-  G.armies.push({id:G.aid++,fac,name:'ทัพ'+F.short,x:h.x+rnd(-20,20),y:h.y+rnd(10,25),hx:h.x,hy:h.y,tx:h.x,ty:h.y,cool:0,mission:null,troops:randomTroops(n,pool.concat(SPECIAL[fac],SPECIAL[fac])).concat(extra)});
+  const [x,y]=toLand(h.x+rnd(-20,20),h.y+rnd(10,25));
+  G.armies.push({id:G.aid++,fac,name:'ทัพ'+F.short,x,y,hx:h.x,hy:h.y,tx:h.x,ty:h.y,cool:0,mission:null,troops:randomTroops(n,pool.concat(SPECIAL[fac],SPECIAL[fac])).concat(extra)});
 }
 
 /* =====================================================================
@@ -2248,9 +2275,19 @@ function buildWorld(){
     g.fillStyle='#7d8a58';g.beginPath();g.moveTo(x-s*.2,y-s*1.2);g.lineTo(x,y-s*1.5);g.lineTo(x+s*1.1,y);g.lineTo(x+s*.3,y);g.fill();}
   for(let i=0;i<2600;i++){const x=R()*WORLD_W,y=R()*WORLD_H;if(!onLand(x,y))continue;if(R()>forestP(20.9-y/120,x))continue;
     const s=2+R()*2.4;g.fillStyle='#22461f';g.beginPath();g.arc(x,y,s,0,7);g.fill();g.fillStyle='#2f5e2a';g.beginPath();g.arc(x-s*.3,y-s*.3,s*.6,0,7);g.fill();}
-  for(const pts of RIV_W){g.strokeStyle='#3a78a3';g.lineWidth=pts===RIV_W[3]?5:3.2;g.lineCap='round';g.lineJoin='round';
-    g.beginPath();pts.forEach((p,i)=>{if(!i)g.moveTo(p[0],p[1]);else{const q=pts[i-1];g.quadraticCurveTo((q[0]+p[0])/2+(R()-.5)*8,(q[1]+p[1])/2+(R()-.5)*8,p[0],p[1]);}});g.stroke();
-    g.strokeStyle='rgba(170,210,235,.35)';g.lineWidth=1;g.stroke();}
+  for(const pts of RIV_W){
+    g.strokeStyle='#25495c';g.lineWidth=11;g.lineCap='round';g.lineJoin='round';
+    g.beginPath();pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();
+    g.strokeStyle='#4b86a1';g.lineWidth=8;g.stroke();
+    g.strokeStyle='rgba(177,218,228,.42)';g.lineWidth=1.2;g.stroke();
+  }
+  for(const b of RIVER_SEGMENTS){
+    if(!onLand(b.x,b.y))continue;
+    g.save();g.translate(b.x,b.y);g.rotate(Math.atan2(b.uy,b.ux));
+    g.fillStyle='#503724';g.fillRect(-8,-14,16,28);
+    for(let y=-13;y<14;y+=3){g.fillStyle=y%2?'#ac8959':'#c39f6b';g.fillRect(-7,y,14,2.4);}
+    g.fillStyle='#e2bf86';g.fillRect(-8,-14,1.5,28);g.fillRect(6.5,-14,1.5,28);g.restore();
+  }
   g.restore();g.strokeStyle='rgba(40,30,15,.6)';g.lineWidth=1.5;g.stroke(path);
   if(landMask)return;
   buildNav();
@@ -2291,17 +2328,19 @@ function drawBanner(g,x,y,k,color,em,num,badge){
     const bx=x-tw/2,by=fy-15*k;g.fillStyle=badge||'rgba(15,20,15,.85)';rrect(g,bx,by,tw,13*k,4*k);g.fill();
     g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(s,x,by+6.8*k);}
 }
+const LANDMARK_INDEX=new Map([
+  ...TOWNS.filter(t=>t[3]!=='v').map((t,i)=>[t[0],i]),
+  ...TOWNS.filter(t=>t[3]==='v').map((t,i)=>[t[0],20+i])
+]);
 function settlementSprite(t){
-  if(t.s==='v')return [0,46];
-  if(t.s==='k')return [2,71];
-  if(t.founded)return [3,51];
-  return [1,57];
+  const index=LANDMARK_INDEX.get(t.n)??(t.s==='k'?19:18);
+  return [index,t.s==='v'?48:t.s==='k'?74:60];
 }
 function drawTownAt(g,t,x,y,k,label){
-  if(label&&settlementArt){
+  if(t.n&&settlementArt){
     const [index,size]=settlementSprite(t);
-    const w=size*k,h=w*320/384;
-    g.drawImage(settlementArt,index%2*384,Math.floor(index/2)*320,384,320,x-w/2,y+5*k-h,w,h);
+    const tile=settlementArt.width/5,w=size*k;
+    g.drawImage(settlementArt,index%5*tile,Math.floor(index/5)*tile,tile,tile,x-w/2,y+5*k-w,w,w);
   }else{
   if(t.s==='v'){const R=rng(Math.round(t.x*7+t.y));for(let i=0;i<4;i++){const hx=x+(R()-.5)*22*k,hy=y+(R()-.5)*12*k;
       g.fillStyle='rgba(0,0,0,.25)';g.fillRect(hx-4*k,hy+1*k,9*k,2*k);g.fillStyle='#8b6a42';g.fillRect(hx-4*k,hy-4*k,8*k,5*k);
@@ -2361,7 +2400,11 @@ function drawMap(){
   drawTravelers(mctx,k);
   for(const t of G.towns){const[x,y]=w2s(t.x,t.y);if(x<-60||y<-60||x>W+60||y>H+60)continue;drawTownAt(mctx,t,x,y,k,true);}
   if(G.tx!=null){const[x,y]=w2s(G.tx,G.ty);const[px,py]=w2s(G.x,G.y);mctx.strokeStyle='rgba(240,210,120,.8)';mctx.setLineDash([4,4]);mctx.lineWidth=1.5;
-    mctx.beginPath();mctx.moveTo(px,py);mctx.lineTo(x,y);mctx.stroke();mctx.setLineDash([]);mctx.beginPath();mctx.arc(x,y,5,0,7);mctx.stroke();}
+    mctx.beginPath();mctx.moveTo(px,py);
+    const waypoints=travelRoutes.get(G)?.path;
+    if(waypoints?.length)for(const [wx,wy] of waypoints)mctx.lineTo(...w2s(wx,wy));
+    else if(segClear(G.x,G.y,G.tx,G.ty))mctx.lineTo(x,y);
+    mctx.stroke();mctx.setLineDash([]);mctx.beginPath();mctx.arc(x,y,5,0,7);mctx.stroke();}
   const t=performance.now()/1000,s=k*.95;
   const ents=G.parties.map(pt=>({pt,y:pt.y})).concat(G.bandits.map(b=>({b,y:b.y}))).concat(G.armies.map(a=>({a,y:a.y})),[{p:1,y:G.y}]).sort((a,c)=>a.y-c.y);
   for(const e of ents){
@@ -2394,7 +2437,7 @@ function renderHud(){
   const hour=(Math.floor(G.dayP*24)+6)%24;
   const clock=$('#worldClock');if(clock)clock.textContent=`${isNight()?'☾ กลางคืน':'☀ กลางวัน'} · ${String(hour).padStart(2,'0')}:00`;
   $('#hud').innerHTML=st('day',G.day,'วัน')+st('coin',window.FX?FX.num('gold',G.gold):G.gold,'ทอง')+st('helm',`${fitCount()}/${limit()}`,wnd?`เจ็บ ${wnd}`:'ทหาร')+st('castle',myTowns().length,'เมือง')+st('chain',prisCount(),'เชลย')+st('tent',G.food,waiting>0?'ตั้งค่าย':'เสบียง')+st('star','Lv '+G.gen.lv,G.gen.pts?`แต้ม +${G.gen.pts}`:'แม่ทัพ');
-  const order=pickPid!=null?'แตะเป้าหมายเพื่อสั่งทัพแยก':waiting>0?'กำลังตั้งค่ายพักแรม':G.tx!=null
+  const order=pickPid!=null?'แตะเป้าหมายเพื่อสั่งทัพแยก':waiting>0?`กำลังพักแรม · เหลือ ${Math.ceil(waiting)} วินาที`:G.tx!=null
     ?(G.tgt?.k==='t'?`กำลังเดินทัพไป ${G.tgt.n}`:G.tgt?'กำลังเดินทัพเข้าหาเป้าหมาย':'กำลังเดินทัพไปยังจุดที่เลือก')
     :'แตะพื้นที่หรือเมืองเพื่อเดินทัพ · ลากเพื่อเลื่อนแผนที่';
   if($('#mapOrder').textContent!==order)$('#mapOrder').textContent=order;
@@ -2415,7 +2458,7 @@ function handlePick(wx,wy,hit){const p=G.parties.find(x=>x.id===pickPid);pickPid
     if(t.s==='v'){toast('หมู่บ้านขึ้นกับค่ายหรือเมืองใกล้ ๆ ให้ไปตีค่ายหรือเมืองนั้นแทน');return;}
     if(rel==='peace'){G.rel[own]='war';toast(`ประกาศสงครามกับ${facOf(own).name}แล้ว`,2400);}
     p.order='attack';p.tgt={k:'t',n:t.n};setTimeout(()=>toast(`${o.name}ยกทัพไปตี${t.n}!`),rel==='peace'?2500:0);save();return;}
-  if(!onLand(wx,wy)){toast('ตรงนั้นเป็นทะเล');return;}
+  if(!canTravel(wx,wy)){toast('ข้ามน้ำได้เฉพาะตรงสะพาน');return;}
   p.order='patrol';p.hx=wx;p.hy=wy;p.tx=wx;p.ty=wy;toast(`${o.name}ไปลาดตระเวนตรงนั้น`);save();}
 function startPick(p){pickPid=p.id;closeSheet();toast(`แตะเป้าหมายให้${offById(p.oid).name}<br>กองโจร · ทัพศัตรู · เมือง หรือแตะที่ว่างเพื่อลาดตระเวนตรงนั้น`,4000);}
 mcv.addEventListener('pointerdown',e=>{if(!G||sheetOpen()||!e.isPrimary||e.button!==0)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:false};mcv.setPointerCapture(e.pointerId);});
@@ -2434,7 +2477,7 @@ function mapMarker(x,y){
       :Math.min(Math.hypot(dx,dy),Math.hypot(dx-4*scale,dy+28*scale));
     if(kind==='t'&&settlementArt){
       const width=settlementSprite(item)[1]*scale;
-      if(Math.abs(dx)<width*.45&&dy>5*scale-width*320/384&&dy<5*scale){
+      if(Math.abs(dx)<width*.45&&dy>5*scale-width&&dy<5*scale){
         marker=Math.min(marker,7+Math.hypot(dx,dy+width*.34)*.2);
       }
     }
@@ -2449,8 +2492,8 @@ mcv.addEventListener('pointerup',e=>{if(drag?.id!==e.pointerId)return;const d=dr
   if(pickPid!=null){handlePick(wx,wy,hit);return;}
   if(hit?.kind==='p'){openParty(hit.item);return;}
   if(hit?.kind==='q'){openConvoy(hit.item);return;}
-  if(!hit&&!onLand(wx,wy)){toast('ตรงนั้นเป็นทะเล เดินไปไม่ได้');return;}
-  camFree=false;waiting=0;G.path=null;
+  if(!hit&&!canTravel(wx,wy)){toast('ข้ามน้ำได้เฉพาะตรงสะพาน');return;}
+  camFree=false;waiting=0;G.path=null;travelRoutes.delete(G);
   G.tgt=hit?(hit.kind==='t'?{k:'t',n:hit.item.n}:{k:hit.kind,id:hit.item.id}):null;
   G.tx=hit?.item.x??wx;G.ty=hit?.item.y??wy;renderHud();
 });
@@ -2476,54 +2519,147 @@ const isNight=()=>G.dayP>=.5;
 const worldPace=()=>.38*(isNight()?.57:1);
 const pSpeed=()=>speedOf(G.army,1,prisCount()*.5)*worldPace();
 const partySpeed=o=>speedOf(o.troops,0,0)*worldPace()*(o.fleeing?.66:1);
-/* coarse land grid for routing around the sea */
-const NS=10;let nav=null,NW=0,NH=0;
-function buildNav(){NW=Math.ceil(WORLD_W/NS);NH=Math.ceil(WORLD_H/NS);nav=new Uint8Array(NW*NH);
-  for(let y=0;y<NH;y++)for(let x=0;x<NW;x++)nav[y*NW+x]=onLand(x*NS+NS/2,y*NS+NS/2)?1:0;}
-function segClear(x0,y0,x1,y1){const n=Math.ceil(Math.hypot(x1-x0,y1-y0)/4);for(let i=1;i<=n;i++)if(!onLand(x0+(x1-x0)*i/n,y0+(y1-y0)*i/n))return false;return true;}
+/* Travel uses the same river and bridge geometry as the campaign map. */
+const NS=8;
+const NAV_DIRS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+let nav=null,navEdges=null,NW=0,NH=0;
+function buildNav(){
+  NW=Math.ceil(WORLD_W/NS);NH=Math.ceil(WORLD_H/NS);nav=new Uint8Array(NW*NH);
+  navEdges=new Int16Array(nav.length).fill(-1);
+  for(let y=0;y<NH;y++)for(let x=0;x<NW;x++)nav[y*NW+x]=canTravel((x+.5)*NS,(y+.5)*NS)?1:0;
+}
+function segClear(x0,y0,x1,y1){
+  if(!canTravel(x0,y0)||!canTravel(x1,y1))return false;
+  const dx=x1-x0,dy=y1-y0;
+  for(const b of RIVER_SEGMENTS){
+    if(Math.max(x0,x1)<Math.min(b.ax,b.bx)-5||Math.min(x0,x1)>Math.max(b.ax,b.bx)+5||
+       Math.max(y0,y1)<Math.min(b.ay,b.by)-5||Math.min(y0,y1)>Math.max(b.ay,b.by)+5)continue;
+    let enter=0,exit=1;
+    const along=(x0-b.ax)*b.ux+(y0-b.ay)*b.uy,across=(y0-b.ay)*b.ux-(x0-b.ax)*b.uy;
+    const du=dx*b.ux+dy*b.uy,dv=dy*b.ux-dx*b.uy;
+    for(const [pos,delta,min,max] of [[along,du,0,b.length],[across,dv,-RIVER_HALF_WIDTH,RIVER_HALF_WIDTH]]){
+      if(Math.abs(delta)<1e-9){if(pos<min||pos>max){enter=2;break;}}
+      else{
+        const t0=(min-pos)/delta,t1=(max-pos)/delta;
+        enter=Math.max(enter,Math.min(t0,t1));exit=Math.min(exit,Math.max(t0,t1));
+      }
+    }
+    if(enter<=exit&&(!bridgeAt(x0+dx*enter,y0+dy*enter)||!bridgeAt(x0+dx*exit,y0+dy*exit)))return false;
+    const length2=dx*dx+dy*dy||1;
+    for(const [x,y] of [[b.ax,b.ay],[b.bx,b.by]]){
+      const t=Math.max(0,Math.min(1,((x-x0)*dx+(y-y0)*dy)/length2));
+      const nx=x0+dx*t,ny=y0+dy*t;
+      if((nx-x)**2+(ny-y)**2<RIVER_HALF_WIDTH**2&&!bridgeAt(nx,ny))return false;
+    }
+  }
+  const steps=Math.ceil(Math.hypot(dx,dy)/4);
+  for(let i=1;i<steps;i++)if(!onLand(x0+dx*i/steps,y0+dy*i/steps))return false;
+  return true;
+}
+function navCell(x,y){
+  const cx=Math.floor(x/NS),cy=Math.floor(y/NS);
+  let best=-1,bd=Infinity;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const c=cx+dx,r=cy+dy;
+    if(c<0||r<0||c>=NW||r>=NH||!nav[r*NW+c])continue;
+    const px=(c+.5)*NS,py=(r+.5)*NS,d=(px-x)**2+(py-y)**2;
+    if(d<bd&&segClear(x,y,px,py)){best=r*NW+c;bd=d;}
+  }
+  return best;
+}
+function navLinks(i){
+  if(navEdges[i]>=0)return navEdges[i];
+  const x=i%NW,y=Math.floor(i/NW);let links=0;
+  NAV_DIRS.forEach(([dx,dy],k)=>{
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&ny>=0&&nx<NW&&ny<NH&&nav[ny*NW+nx]&&segClear((x+.5)*NS,(y+.5)*NS,(nx+.5)*NS,(ny+.5)*NS))links|=1<<k;
+  });
+  return navEdges[i]=links;
+}
 function navPath(x0,y0,x1,y1){
-  const ci=(x,y)=>Math.max(0,Math.min(NH-1,Math.floor(y/NS)))*NW+Math.max(0,Math.min(NW-1,Math.floor(x/NS)));
-  const s=ci(x0,y0);let g=ci(x1,y1);
-  if(!nav[g]){let best=-1,bd=1e9;const gx=g%NW,gy=(g/NW)|0;for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const x=gx+dx,y=gy+dy;if(x<0||y<0||x>=NW||y>=NH)continue;const k=y*NW+x;if(nav[k]&&dx*dx+dy*dy<bd){bd=dx*dx+dy*dy;best=k;}}if(best<0)return null;g=best;}
-  const prev=new Int32Array(NW*NH).fill(-2);prev[s]=-1;const q=[s];let qi=0;
-  while(qi<q.length){const i=q[qi++];if(i===g)break;const x=i%NW,y=(i/NW)|0;
-    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=NW||ny>=NH)continue;const j=ny*NW+nx;if(prev[j]!==-2||!nav[j])continue;prev[j]=i;q.push(j);}}
-  if(prev[g]===-2)return null;
-  const pts=[];for(let i=g;i!==-1&&i!==s;i=prev[i])pts.unshift([i%NW*NS+NS/2,((i/NW)|0)*NS+NS/2]);
-  if(onLand(x1,y1))pts.push([x1,y1]);
-  const out=[];let cx=x0,cy=y0,i=0;
-  while(i<pts.length){let j=pts.length-1;while(j>i&&!segClear(cx,cy,pts[j][0],pts[j][1]))j--;out.push(pts[j]);cx=pts[j][0];cy=pts[j][1];i=j+1;}
+  if(!nav)buildNav();
+  const start=navCell(x0,y0),goal=navCell(x1,y1);
+  if(start<0||goal<0)return null;
+  const prev=new Int32Array(nav.length).fill(-2);prev[start]=-1;
+  const queue=[start];
+  for(let k=0;k<queue.length;k++){
+    const i=queue[k];if(i===goal)break;const links=navLinks(i);
+    for(let j=0;j<NAV_DIRS.length;j++){
+      if(!(links&(1<<j)))continue;
+      const [dx,dy]=NAV_DIRS[j],next=i+dy*NW+dx;
+      if(prev[next]!==-2)continue;
+      prev[next]=i;queue.push(next);
+    }
+  }
+  if(prev[goal]===-2)return null;
+  const pts=[];
+  for(let i=goal;i>=0;i=prev[i])pts.push([(i%NW+.5)*NS,(Math.floor(i/NW)+.5)*NS]);
+  pts.reverse();pts.push([x1,y1]);
+  const out=[];let x=x0,y=y0,i=0;
+  while(i<pts.length){
+    let j=Math.min(pts.length-1,i+10);
+    while(j>i&&!segClear(x,y,...pts[j]))j--;
+    [x,y]=pts[j];out.push(pts[j]);i=j+1;
+  }
   return out;
 }
-// step toward a point; if the sea is in the way, slide along the shore instead of stopping
-// nearest dry ground to a point (spiral search) — keeps anyone from ending up in the sea
-function toLand(x,y){if(onLand(x,y))return[x,y];for(let r=4;r<200;r+=4)for(let k=0;k<16;k++){const a=k/16*Math.PI*2,nx=x+Math.cos(a)*r,ny=y+Math.sin(a)*r;if(onLand(nx,ny))return[nx,ny];}return[x,y];}
-function putOnLand(o){const p=toLand(o.x,o.y);o.x=p[0];o.y=p[1];}
-function stepToward(o,tx,ty,sp){if(!onLand(o.x,o.y))putOnLand(o);const dx=tx-o.x,dy=ty-o.y,L=Math.hypot(dx,dy);if(L<.01)return true;
-  if(L<=sp){if(onLand(tx,ty)){o.x=tx;o.y=ty;}return true;}
-  const a0=Math.atan2(dy,dx);
-  for(const da of[0,.35,-.35,.7,-.7,1.05,-1.05,1.4,-1.4,1.8,-1.8]){const nx=o.x+Math.cos(a0+da)*sp,ny=o.y+Math.sin(a0+da)*sp;if(onLand(nx,ny)){o.x=nx;o.y=ny;return false;}}
-  return false;}
+function toLand(x,y){if(canTravel(x,y))return[x,y];for(let r=4;r<200;r+=4)for(let k=0;k<16;k++){const a=k/16*Math.PI*2,nx=x+Math.cos(a)*r,ny=y+Math.sin(a)*r;if(canTravel(nx,ny))return[nx,ny];}return[x,y];}
+function putOnLand(o){[o.x,o.y]=toLand(o.x,o.y);}
+function stepToward(o,tx,ty,sp){
+  const dx=tx-o.x,dy=ty-o.y,L=Math.hypot(dx,dy);
+  if(L<.01)return true;
+  const k=Math.min(1,sp/L),x=o.x+dx*k,y=o.y+dy*k;
+  if(!segClear(o.x,o.y,x,y))return false;
+  o.x=x;o.y=y;return k===1;
+}
+const travelRoutes=new WeakMap();
+function followRoute(o,tx,ty,sp,dt){
+  if(!canTravel(o.x,o.y))putOnLand(o);
+  if(!canTravel(tx,ty))[tx,ty]=toLand(tx,ty);
+  let route=travelRoutes.get(o);
+  if((!route?.path?.length||Math.hypot(route.tx-tx,route.ty-ty)>12)&&segClear(o.x,o.y,tx,ty)){
+    travelRoutes.delete(o);return stepToward(o,tx,ty,sp)?'arrived':'moving';
+  }
+  if(!route||Math.hypot(route.tx-tx,route.ty-ty)>12||(!route.path?.length&&route.retry<=0)){
+    route={tx,ty,path:navPath(o.x,o.y,tx,ty),retry:1};travelRoutes.set(o,route);
+  }
+  route.retry-=dt;
+  const wp=route.path?.[0];
+  if(!wp)return 'blocked';
+  if(stepToward(o,...wp,sp))route.path.shift();
+  return 'moving';
+}
 let waiting=0;
-function moveParty(o,dt){const L=Math.hypot(o.tx-o.x,o.ty-o.y);o.moving=L>2;
-  if(L>1){const px=o.x,py=o.y;stepToward(o,o.tx,o.ty,partySpeed(o)*dt);if(Math.hypot(o.x-px,o.y-py)<.001){o.tx=o.x;o.ty=o.y;}}}
+function moveParty(o,dt){
+  const x=o.x,y=o.y;
+  const result=followRoute(o,o.tx,o.ty,partySpeed(o)*dt,dt);
+  o.moving=Math.hypot(o.x-x,o.y-y)>.001;
+  if(result==='blocked'&&o.mission==null){o.tx=o.x;o.ty=o.y;}
+}
 function wander(o,r){if(Math.hypot(o.tx-o.x,o.ty-o.y)<4||Math.random()<.003){const a=Math.random()*6.28,rr=rnd(10,r);o.tx=o.hx+Math.cos(a)*rr;o.ty=o.hy+Math.sin(a)*rr;}}
+function nearby(a,b,range){return Math.hypot(a.x-b.x,a.y-b.y)<range&&segClear(a.x,a.y,b.x,b.y);}
+function stopTravel(){G.tgt=null;G.tx=null;G.path=null;waiting=0;travelRoutes.delete(G);}
 function mapStep(dt){
-  let moving=false;
-  if(G.tgt&&(G.tgt.k==='b'||G.tgt.k==='a')){const o=(G.tgt.k==='b'?G.bandits:G.armies).find(x=>x.id===G.tgt.id);if(o){G.tx=o.x;G.ty=o.y;}else{G.tgt=null;G.tx=null;}}
-  if(G.tx!=null){const sp=pSpeed()*dt;
-    if(!G.path||Math.hypot((G.ptx||0)-G.tx,(G.pty||0)-G.ty)>15||G.pathT<=0){
-      G.path=segClear(G.x,G.y,G.tx,G.ty)?[[G.tx,G.ty]]:(navPath(G.x,G.y,G.tx,G.ty)||[[G.tx,G.ty]]);G.ptx=G.tx;G.pty=G.ty;G.pathT=1.5;}
-    G.pathT-=dt;
-    const wp=G.path[0];
-    if(stepToward(G,wp[0],wp[1],sp))G.path.shift();
-    if(!G.path.length||Math.hypot(G.tx-G.x,G.ty-G.y)<1){const tg=G.tgt;G.tx=null;G.path=null;
-      if(tg&&tg.k==='t'){const t=G.towns.find(t=>t.n===tg.n);G.tgt=null;G.x=t.x;G.y=t.y;openTown(t);return;}
-      if(tg?.k==='c'){const cave=G.caves.find(c=>c.id===tg.id);G.tgt=null;if(cave){openCave(cave);return;}}}
-    moving=true;}
-  if(waiting>0){waiting-=dt;moving=true;if(waiting<=0)toast('พักแรมเสร็จแล้ว',1200);}
+  let moving=false,quarry=null;
+  if(G.tgt?.k==='b'||G.tgt?.k==='a'){
+    quarry=(G.tgt.k==='b'?G.bandits:G.armies).find(x=>x.id===G.tgt.id);
+    if(quarry){G.tx=quarry.x;G.ty=quarry.y;}else stopTravel();
+  }
+  if(G.tx!=null){
+    const result=followRoute(G,G.tx,G.ty,pSpeed()*dt,dt);
+    const tg=G.tgt;
+    if(quarry&&nearby(G,quarry,15)){stopTravel();encounter(quarry,tg.k,false);return;}
+    if(result==='arrived'&&!quarry){
+      stopTravel();
+      if(tg?.k==='t'){const t=G.towns.find(t=>t.n===tg.n);if(t&&nearby(G,t,3)){openTown(t);return;}}
+      if(tg?.k==='c'){const cave=G.caves.find(c=>c.id===tg.id);if(cave&&nearby(G,cave,3)){openCave(cave);return;}}
+    }
+    if(result==='blocked'){stopTravel();toast('เดินไปไม่ถึงจุดหมาย ลองเลือกทางใกล้สะพาน');}
+    moving=result!=='blocked';
+  }
+  if(waiting>0){dt=Math.min(waiting,dt);waiting-=dt;moving=true;if(waiting<=1e-9){waiting=0;toast('พักแรมเสร็จแล้ว',1200);}}
   if(!moving){for(const b of G.bandits)b.moving=false;for(const a of G.armies)a.moving=false;return;}
-  G.dayP+=dt/DAY_SECONDS;if(G.dayP>=1){G.dayP-=1;dailyTick();}
+  G.dayP+=dt/DAY_SECONDS;if(G.dayP>=1-1e-9){G.dayP=Math.max(0,G.dayP-1);dailyTick();}
   updateTravelers(dt);
   const pS=strength(G.army,G.gen.lv);
   for(const b of G.bandits){
@@ -2532,7 +2668,8 @@ function mapStep(dt){
     else if(d<90&&pS>bS*3){b.fleeing=true;const a=Math.atan2(b.y-G.y,b.x-G.x);b.tx=b.x+Math.cos(a)*60;b.ty=b.y+Math.sin(a)*60;}
     else{b.fleeing=false;const tp=b.cool<=0&&G.parties.find(p=>Math.hypot(p.x-b.x,p.y-b.y)<110&&bS>=partyS(p)*.8);if(tp){b.tx=tp.x;b.ty=tp.y;}else wander(b,80);}
     moveParty(b,dt);
-    if(b.cool<=0&&Math.hypot(G.x-b.x,G.y-b.y)<15){const mine=G.tgt&&G.tgt.k==='b'&&G.tgt.id===b.id;G.tx=null;G.tgt=null;waiting=0;encounter(b,'b',!mine);return;}
+    const mine=quarry===b;
+    if((mine||b.cool<=0)&&nearby(G,b,15)){stopTravel();encounter(b,'b',!mine);return;}
   }
   for(const a of G.armies){
     const aS=strength(a.troops,0),d=Math.hypot(G.x-a.x,G.y-a.y),war=G.rel[a.fac]==='war';a.cool-=dt;
@@ -2541,13 +2678,13 @@ function mapStep(dt){
       else{
         a.tx=t.x;a.ty=t.y+6;
         const approach=Math.hypot(a.tx-a.x,a.ty-a.y);
-        if(approach<14){townAttacked(a,t);return;}
+        if(approach<14&&nearby(a,t,20)){townAttacked(a,t);return;}
         if(approach<110&&!a.warned){a.warned=true;townAttacked(a,t,true);save();return;}
       }}
     if(a.mission==null){if(war&&a.cool<=0&&d<160&&aS>=pS*.9){a.tx=G.x;a.ty=G.y;a.chase=(a.chase||0)+dt;if(a.chase>7){a.cool=14;a.chase=0;}}else wander(a,90);}
     moveParty(a,dt);
-    if(Math.hypot(G.x-a.x,G.y-a.y)<15){const mine=G.tgt&&G.tgt.k==='a'&&G.tgt.id===a.id;
-      if(mine||(war&&a.cool<=0&&a.mission==null)){G.tx=null;G.tgt=null;waiting=0;encounter(a,'a',!mine);return;}}
+    const mine=quarry===a;
+    if((mine||(war&&a.cool<=0&&a.mission==null))&&nearby(G,a,15)){stopTravel();encounter(a,'a',!mine);return;}
   }
   partiesStep(dt);
 }
@@ -2586,9 +2723,9 @@ function partiesStep(dt){
     else{const pS=partyS(p),R=o.trait==='hunt'?160:110;
       const prey=G.bandits.filter(b=>Math.hypot(b.x-p.hx,b.y-p.hy)<R&&strength(b.troops,0)<pS*1.05).sort((a,b)=>Math.hypot(a.x-p.x,a.y-p.y)-Math.hypot(b.x-p.x,b.y-p.y))[0];
       if(prey){p.tx=prey.x;p.ty=prey.y;}else wander(p,60);}
-    const px=p.x,py=p.y;stepToward(p,p.tx,p.ty,sp);p.moving=Math.hypot(p.x-px,p.y-py)>.001;
-    if(p.order==='return'&&Math.hypot(G.x-p.x,G.y-p.y)<14){mergeParty(p);continue;}
-    if(p.order==='attack'&&p.tgt.k==='t'){const t=findTgt(p.tgt);if(Math.hypot(t.x-p.x,t.y+6-p.y)<12){partySiege(p,t);continue;}}
+    const px=p.x,py=p.y;followRoute(p,p.tx,p.ty,sp,dt);p.moving=Math.hypot(p.x-px,p.y-py)>.001;
+    if(p.order==='return'&&nearby(G,p,14)){mergeParty(p);continue;}
+    if(p.order==='attack'&&p.tgt.k==='t'){const t=findTgt(p.tgt);if(nearby(p,t,18)){partySiege(p,t);continue;}}
     const b=G.bandits.find(b=>Math.hypot(b.x-p.x,b.y-p.y)<12);if(b){partyFight(p,b,'b');continue;}
     const a=G.armies.find(a=>G.rel[a.fac]==='war'&&Math.hypot(a.x-p.x,a.y-p.y)<12);if(a){partyFight(p,a,'a');continue;}
   }
@@ -2634,12 +2771,16 @@ function dailyTick(){
   renderHud();save();
 }
 function removeRandomTroop(){const e=pickR(G.army.filter(a=>a.n>0));if(!e)return;e.n--;if(e.w>e.n)e.w=e.n;G.army=G.army.filter(a=>a.n>0);}
+function campForDays(days){
+  stopTravel();closeSheet();waiting=days*DAY_SECONDS;renderHud();
+  toast(`ตั้งค่ายพัก ${days} วัน`,1500);
+}
 $('#bWait').onclick=()=>{const wnd=armyCount()-fitCount(),eat=eatPerDay();
   openSheet(`<h2>ตั้งค่ายพักแรม</h2><p style="margin:0">กางเต็นท์พักทัพ ทหารบาดเจ็บหายเร็วขึ้นเกือบเท่าตัว${wnd?` (ตอนนี้เจ็บ ${wnd} คน)`:''} แต่ทุกวันกินเสบียง ${eat} หน่วย · มีอยู่ ${G.food}</p>
     <small class="muted">ระหว่างพัก ข้าศึกหรือโจรอาจบุกมาถึงค่ายได้ แตะแผนที่เมื่อไหร่ก็เลิกพักทันที</small>
     <div class="row">${[1,3,5,7].map(d=>`<button class="btn grow" data-camp="${d}" type="button" ${G.food<eat*d?'style="opacity:.6"':''}>${d} วัน</button>`).join('')}</div>
     <button class="btn" id="cpNo" type="button">ยกเลิก</button>`);
-  document.querySelectorAll('[data-camp]').forEach(b=>b.onclick=()=>{const d=+b.dataset.camp;closeSheet();waiting=d*DAY_SECONDS;G.tx=null;G.tgt=null;G.path=null;toast(`ตั้งค่ายพัก ${d} วัน`,1500);});
+  document.querySelectorAll('[data-camp]').forEach(b=>b.onclick=()=>campForDays(+b.dataset.camp));
   $('#cpNo').onclick=closeSheet;};
 
 function shrink(list,f){for(const e of list){e.n=Math.max(0,Math.round(e.n*(1-f)));if(e.w>e.n)e.w=e.n;}prune(list);}
@@ -2811,7 +2952,7 @@ function openTown(t,tab='overview'){
         <div class="row"><button class="btn grow" id="wNo" type="button">ไม่</button><button class="btn gold grow" id="wYes" type="button">ประกาศสงคราม</button></div>`);
       $('#wNo').onclick=()=>openTown(t);$('#wYes').onclick=()=>{closeSheet();beginSiege(t);};}
     else{closeSheet();beginSiege(t);}};
-  const leave=()=>{closeSheet();const p=[[0,16],[16,0],[-16,0],[0,-16],[12,12],[-12,12]].map(([dx,dy])=>[G.x+dx,G.y+dy]).find(([x,y])=>onLand(x,y));if(p){G.x=p[0];G.y=p[1];}};
+  const leave=()=>{closeSheet();const p=[[0,16],[16,0],[-16,0],[0,-16],[12,12],[-12,12]].map(([dx,dy])=>[G.x+dx,G.y+dy]).find(([x,y])=>segClear(G.x,G.y,x,y));if(p){G.x=p[0];G.y=p[1];}};
   $('#tExitTop').onclick=leave;if($('#tLeave'))$('#tLeave').onclick=leave;
 }
 function openArmy(){
@@ -2887,7 +3028,7 @@ function openSplit(o){const pick={};const cap=offCap(o);
     $('#sNo').onclick=openArmy;
     const go=order=>{const troops=[];for(const[id,n]of Object.entries(pick)){if(!n)continue;const e=G.army.find(x=>x.id===id);const xp=Math.round((e.xp||0)*n/e.n);e.n-=n;e.xp-=xp;troops.push({id,n,w:0,xp});}
       G.army=G.army.filter(a=>a.n>0);
-      const p={id:G.pid++,oid:o.id,troops,x:G.x+10,y:G.y+8,tx:G.x+10,ty:G.y+8,hx:G.x,hy:G.y,order:'patrol'};if(!onLand(p.x,p.y)){p.x=G.x;p.y=G.y;}
+      const p={id:G.pid++,oid:o.id,troops,x:G.x+10,y:G.y+8,tx:G.x+10,ty:G.y+8,hx:G.x,hy:G.y,order:'patrol'};if(!segClear(G.x,G.y,p.x,p.y)){p.x=G.x;p.y=G.y;}
       G.parties.push(p);o.party=p.id;save();
       if(order==='attack')startPick(p);else{closeSheet();toast(`${o.name}นำทหาร ${total(troops)} นายออกลาดตระเวน`,2600);}};
     $('#sPatrol').onclick=()=>go('patrol');$('#sAttack').onclick=()=>go('attack');};
@@ -2948,7 +3089,7 @@ $('#bMenu').onclick=()=>{openSheet(`<h2>เมนู</h2><div class="list">
 
 const FOUND_GOLD=250,FOUND_FOOD=50;
 function foundingBlock(){
-  if(!onLand(G.x,G.y)||G.towns.some(t=>Math.hypot(t.x-G.x,t.y-G.y)<55))return 'เลือกพื้นที่บนบก ห่างเมืองหรือหมู่บ้านเดิมอย่างน้อย 55 หน่วย';
+  if(!canTravel(G.x,G.y)||bridgeAt(G.x,G.y)||G.towns.some(t=>Math.hypot(t.x-G.x,t.y-G.y)<55))return 'เลือกพื้นที่บนบก ห่างเมืองหรือหมู่บ้านเดิมอย่างน้อย 55 หน่วย';
   if(G.gold<FOUND_GOLD||G.food<FOUND_FOOD)return 'ทองหรือเสบียงไม่พอ';
   return '';
 }
@@ -3014,7 +3155,19 @@ function produceAndTrade(){
 function updateTravelers(dt){
   for(let i=G.caravans.length-1;i>=0;i--){
     const c=G.caravans[i],wp=c.path[0];
-    if(wp&&stepToward(c,wp[0],wp[1],(c.kind==='patrol'?39:37)*worldPace()*dt))c.path.shift();
+    if(wp){
+      const outcome=followRoute(c,wp[0],wp[1],(c.kind==='patrol'?39:37)*worldPace()*dt,dt);
+      if(outcome==='arrived')c.path.shift();
+      if(outcome==='blocked'){
+        const origin=G.towns.find(t=>t.n===c.from),destination=G.towns.find(t=>t.n===(c.returning?c.from:c.to));
+        const path=destination&&makeRoute(c,destination);
+        if(path?.length)c.path=path;
+        else{
+          if(origin&&c.good&&!c.returning)origin.goods[c.good]+=c.n;
+          G.caravans.splice(i,1);save();continue;
+        }
+      }
+    }
     if(c.path.length)continue;
     const a=G.towns.find(t=>t.n===c.from),b=G.towns.find(t=>t.n===c.to);
     if(!a||!b){G.caravans.splice(i,1);continue;}
@@ -3132,6 +3285,27 @@ function citySprite(id){
   const p=PROJECTS[id];
   return `<span class="city-sprite city-sprite-${p.sprite}" aria-hidden="true">${p.mark}</span>`;
 }
+function drawCityMuster(t){
+  const canvas=$('#cityMuster'),g=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  const local=nearby(G,t,20);
+  const units=[];
+  for(const troop of t.gar)for(let n=0;n<troop.n-(troop.w||0);n++)units.push({type:TROOPS[troop.id].type,guard:true});
+  if(local)for(const troop of G.army)for(let n=0;n<troop.n-(troop.w||0);n++)units.push({type:TROOPS[troop.id].type,guard:false});
+  const count=units.length;
+  const columns=Math.min(count||1,Math.max(10,Math.ceil(Math.sqrt(count*9))));
+  const rows=Math.max(1,Math.ceil(count/columns)),dx=Math.min(38,(w-120)/columns),dy=Math.min(30,(h-38)/rows);
+  const size=Math.min(1.45,dx*.08,dy*.11);
+  const guardPalette=palette('#a4843a'),center=w*.52;
+  for(let i=0;i<count;i++){
+    const unit=units[i],row=Math.floor(i/columns),col=i%columns;
+    drawMan(g,center+(col-(columns-1)/2)*dx,24+row*dy,size,'blue',unit.type,{face:Math.PI/2,skin:i%4,pal:unit.guard?guardPalette:undefined});
+  }
+  if(local){
+    drawMan(g,45,h*.62,1.65,'blue','gen',{face:Math.PI/2});
+    drawBanner(g,46,h*.53,1.05,G.gen.color,G.gen.emblem,null);
+  }
+  canvas.setAttribute('aria-label',`กองรักษาการณ์ ${total(t.gar)} นาย${local?` · แม่ทัพและทหารพร้อมรบ ${fitCount()} นาย`:''}`);
+}
 function openCityWorkshop(t){
   initCityLayout(t);
   const cards=Object.keys(PROJECTS).filter(id=>id!=='keep'||t.founded&&t.s==='c').map(id=>{
@@ -3142,7 +3316,7 @@ function openCityWorkshop(t){
       <small class="${reason?'build-block':''}">${reason||`${days} วัน · พร้อมวาง`}</small></span></button>`;
   }).join('');
   const plots=CITY_TILES.map(i=>{
-    if(CITY_ROAD.has(i))return '<span class="city-road" aria-hidden="true"></span>';
+    if(CITY_ROAD.has(i))return i===5?'<canvas class="city-muster" id="cityMuster" width="1100" height="164" role="img"></canvas>':'';
     const job=t.buildQueue.find(x=>x.tile===i),id=job?.id||t.layout[i],p=PROJECTS[id];
     const label=job?`เหลือ ${job.finish-G.day} วัน`:p?p.name:'';
     return `<button class="city-plot ${job?'working':p?'built':''}" type="button" data-city-tile="${i}"
@@ -3162,11 +3336,11 @@ function openCityWorkshop(t){
     </div>
     <p id="cityBuildHint" role="status">ลากแบบอาคารลงฉาก หรือแตะแบบแล้วแตะช่อง</p>
     <footer class="city-footer"><div><h3>คิวก่อสร้าง</h3>${queue?`<ul class="build-queue">${queue}</ul>`:'<small>ยังไม่มีอาคารกำลังก่อสร้าง</small>'}</div>
-      <button class="btn" type="button" id="buildWait">รอ 1 วัน</button></footer>`,true);
+      <button class="btn" type="button" id="buildWait" title="กลับแผนที่และเดินเวลา 1 วันในเกม">รอ 1 วันบนแผนที่</button></footer>`,true);
   $('#cityTrade').onclick=()=>openTown(t,'trade');
   $('#cityTroops').onclick=()=>openTown(t);
   $('#cityExit').onclick=closeSheet;
-  bindCityProjects(t);
+  bindCityProjects(t);drawCityMuster(t);
 }
 function bindCityProjects(t){
   const cards=[...document.querySelectorAll('[data-project]')],tiles=[...document.querySelectorAll('[data-city-tile]')],hint=$('#cityBuildHint');
@@ -3174,6 +3348,7 @@ function bindCityProjects(t){
   let selected=null,drag=null;
   const select=id=>{
     selected=id;
+    $('#cityMuster').parentElement.classList.add('placing');
     cards.forEach(b=>b.setAttribute('aria-pressed',b.dataset.project===id));
     tiles.forEach(b=>b.classList.toggle('placeable',validBuildTile(t,id,+b.dataset.cityTile)));
     hint.textContent=`${PROJECTS[id].name} · ${PROJECTS[id].desc} · ${id==='wall'?'วางตามแนวขอบเมือง':'วางในช่องกรอบทอง'}`;
@@ -3214,7 +3389,7 @@ function bindCityProjects(t){
     const id=t.layout[tile];
     if(id&&cards.some(card=>card.dataset.project===id&&!card.disabled))select(id);
   });
-  $('#buildWait').onclick=()=>{dailyTick();openCityWorkshop(t);};
+  $('#buildWait').onclick=()=>campForDays(1);
 }
 function tradePanel(t,hostile){
   const mine=ownerOf(t)==='p',route=G.caravans.find(c=>c.from===t.n&&c.kind!=='patrol'),report=t.lastShipment;
@@ -3279,7 +3454,6 @@ function encounter(o,kind,chased){
     let lost=0;if(chased&&partySpeed(o)>=pSpeed()*.95&&fitCount()>0){lost=Math.max(1,Math.round(fitCount()*.12));for(let i=0;i<lost;i++)removeRandomTroop();}
     // run directly away; if the sea is behind us, swing round along the shore until there is ground
     const a=Math.atan2(G.y-o.y,G.x-o.x);let done=false;for(const da of[0,.4,-.4,.8,-.8,1.2,-1.2,1.6,-1.6,2,-2])for(const r of[55,40]){if(done)break;const nx=G.x+Math.cos(a+da)*r,ny=G.y+Math.sin(a+da)*r;if(onLand(nx,ny)&&segClear(G.x,G.y,nx,ny)){G.x=nx;G.y=ny;done=true;}}
-    if(!done){const p=toLand(G.x+Math.cos(a)*50,G.y+Math.sin(a)*50);G.x=p[0];G.y=p[1];}
     o.cool=12;o.tx=o.x-Math.cos(a)*30;o.ty=o.y-Math.sin(a)*30;closeSheet();if(chased)toast(lost?`หนีพ้น แต่เสียทหารคุมท้าย ${lost} คน`:'ถอยออกมาได้');save();};
 }
 function beginSiege(t){
@@ -3855,17 +4029,12 @@ function buildBg(){
     g.save();g.globalAlpha=.72;g.imageSmoothingQuality='high';g.drawImage(fieldArt,0,0,W,H);g.restore();
   }
   for(let i=0;i<W*H/14;i++){const x=R()*W,y=R()*H,k=R();g.fillStyle=k<.45?'rgba(30,60,20,.28)':k<.85?'rgba(120,160,70,.22)':'rgba(170,160,90,.25)';g.fillRect(x,y,1+R()*2,1+R()*1.5);}
-  for(let i=0;i<14;i++){const x=R()*W,y=R()*H;g.fillStyle='rgba(40,70,25,.18)';g.beginPath();g.ellipse(x,y,cell*(.6+R()),cell*(.4+R()*.6),R()*3,0,7);g.fill();}
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const x=c*cell,y=r*cell,t=ter(c,r);
     if(t==='s'){g.fillStyle='#bca77d';g.fillRect(x,y,cell,cell);paintMaterial(g,'dirt',x,y,cell,cell,135,.72);}
     if(t==='p'){g.fillStyle='#a69d86';g.fillRect(x,y,cell,cell);g.strokeStyle='rgba(60,50,40,.25)';g.lineWidth=1;
       for(let i=1;i<4;i++){g.beginPath();g.moveTo(x,y+i*cell/4);g.lineTo(x+cell,y+i*cell/4);g.stroke();}
       for(let i=0;i<4;i++)for(let j=0;j<3;j++){const ox=(i%2?cell/6:0)+j*cell/3;g.beginPath();g.moveTo(x+ox,y+i*cell/4);g.lineTo(x+ox,y+(i+1)*cell/4);g.stroke();}}
     if(t==='h'){
-      const ridge=g.createRadialGradient(x+cell*.34,y+cell*.32,0,x+cell*.52,y+cell*.56,cell*.61);
-      ridge.addColorStop(0,'rgba(234,202,139,.78)');ridge.addColorStop(.51,'rgba(132,108,67,.42)');
-      ridge.addColorStop(.78,'rgba(40,28,16,.52)');ridge.addColorStop(1,'rgba(40,28,16,0)');
-      g.fillStyle=ridge;g.fillRect(x,y,cell,cell);
       if(fieldProps){
         const variant=(c+r)%2;
         drawFieldProp(g,2+variant,x+cell*.42,y+cell*.65,cell*.61);
@@ -3880,22 +4049,21 @@ function buildBg(){
       g.strokeStyle='rgba(196,220,206,.28)';g.lineWidth=.8;
       for(const k of[.3,.55,.8]){const ox=R()*cell*.3;g.beginPath();g.moveTo(x+ox,y+cell*k);g.quadraticCurveTo(x+ox+cell*.15,y+cell*(k-.06),x+ox+cell*.3,y+cell*k);g.stroke();}
       if(t==='b'){
-        g.fillStyle='rgba(25,17,9,.38)';g.fillRect(x-cell*.1,y+cell*.25,cell*1.27,cell*.65);
+        g.fillStyle='#5d4630';g.fillRect(x-cell*.14,y,cell*1.28,cell);
         for(let i=0;i<12;i++){
           g.fillStyle=['#8b653e','#9d7650','#a78559'][i%3];
-          g.fillRect(x-cell*.14+i*cell*.107,y+cell*.2,cell*.096,cell*.6);
+          g.fillRect(x-cell*.14+i*cell*.107,y,cell*.096,cell);
         }
-        g.fillStyle='#4f3418';g.fillRect(x-cell*.14,y+cell*.18,cell*1.28,cell*.06);
-        g.fillRect(x-cell*.14,y+cell*.76,cell*1.28,cell*.06);
+        g.fillStyle='#4f3418';
+        if(!inB(c,r-1)||ter(c,r-1)!=='b')g.fillRect(x-cell*.14,y,cell*1.28,cell*.06);
+        if(!inB(c,r+1)||ter(c,r+1)!=='b')g.fillRect(x-cell*.14,y+cell*.94,cell*1.28,cell*.06);
       }}
     if(t==='W'||t==='D'||t==='r')drawWallCell(g,c,r,t,R);}
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){if(ter(c,r)!=='f')continue;const x=c*cell,y=r*cell;
-    g.save();g.beginPath();g.ellipse(x+cell*.5,y+cell*.5,cell*.54,cell*.42,-.25,0,7);g.clip();
-    paintMaterial(g,'forest',x-cell*.1,y-cell*.1,cell*1.2,cell*1.2,90,.9);g.restore();
     const trees=[];for(let i=0;i<9;i++)trees.push([x+cell*(.15+R()*.7),y+cell*(.15+R()*.75)]);trees.sort((a,b)=>a[1]-b[1]);
     if(fieldProps){
       for(let i=0;i<trees.length;i++){
-        const [tx,ty]=trees[i],size=cell*(.32+R()*.13);
+        const [tx,ty]=trees[i],size=cell*(.43+R()*.16);
         if(i%2===0)drawFieldProp(g,i%4===0?0:1,tx,ty,size);
       }
       continue;
@@ -4612,7 +4780,7 @@ function battleResult(){
     if(foe.kind==='defend'){const t=foe.town,a=foe.ref;t.own=a.fac;t.gar=a.troops.map(e=>({id:e.id,n:Math.ceil(e.n*.6),w:0}));for(const e of a.troops)e.n=Math.floor(e.n*.4);prune(a.troops);a.mission=null;if(!total(a.troops))G.armies=G.armies.filter(x=>x!==a);terrDirty=true;}
     const safe=G.towns.filter(t=>{const o=ownerOf(t);return o==='p'||relOf(o)!=='war';});
     const t=(safe.length?safe:G.towns).slice().sort((a,c)=>Math.hypot(a.x-G.x,a.y-G.y)-Math.hypot(c.x-G.x,c.y-G.y))[0];
-    {const p=[[12,14],[-12,14],[14,-10],[-14,-10],[0,18],[0,-18]].map(([dx,dy])=>[t.x+dx,t.y+dy]).find(([x,y])=>onLand(x,y))||toLand(t.x,t.y);G.x=p[0];G.y=p[1];}G.day+=2;for(const e of G.army)e.w=Math.min(e.n,e.w+Math.round(e.n*.3));
+    {const p=[[12,14],[-12,14],[14,-10],[-14,-10],[0,18],[0,-18]].map(([dx,dy])=>[t.x+dx,t.y+dy]).find(([x,y])=>segClear(t.x,t.y,x,y))||toLand(t.x,t.y);G.x=p[0];G.y=p[1];}G.day+=2;finishCityProjects();for(const e of G.army)e.w=Math.min(e.n,e.w+Math.round(e.n*.3));
     html=`<h2 style="color:var(--bad)">พ่ายแพ้…</h2>
       <p style="margin:0">${foe.kind==='defend'?`${foe.town.n}ถูกยึดไปแล้ว `:''}แม่ทัพ${playerName()}ถูกพาตัวหนีมาฟื้นที่${t.n} เสียทอง ${lostGold} เหรียญ และเชลยหนีไปหมด</p>
       <div class="item"><div class="t"><b>ฝ่ายเรา: ตาย ${dead} · บาดเจ็บ ${wnd}</b><small>รวบรวมกำลังใหม่ จ้างคนเพิ่ม แล้วค่อยกลับไปแก้แค้น</small></div></div>`;
