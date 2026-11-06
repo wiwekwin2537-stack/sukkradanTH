@@ -342,8 +342,11 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
       <div class="unit-list" id="unitList" role="group" aria-label="กองทหารฝ่ายเรา"></div>
       <div class="deploy-orders" role="group" aria-label="คำสั่งกองทหาร">
         <button class="btn" id="bAttack" type="button" aria-pressed="false" disabled>บุก</button>
-        <button class="btn" id="bHold" type="button" aria-pressed="false" disabled>ตั้งรับ</button>
+        <button class="btn" id="bHold" type="button" aria-pressed="false" disabled>รักษาแนว</button>
+        <button class="btn" id="bVolley" type="button" aria-pressed="false" disabled>ระดมยิงปืนไฟ</button>
+        <button class="btn" id="bFlank" type="button" aria-pressed="false" disabled>ปักจุดอ้อมตี</button>
       </div>
+      <small class="muted">รักษาแนวจะยืนที่เดิม · ระดมยิงใช้กับปืนไฟ · ปักจุดอ้อมตีแล้วแตะช่องในสนาม</small>
       <div class="lbl">รูปขบวน</div>
       <div class="row" role="group" aria-label="รูปขบวน">
         <button class="btn grow" type="button" data-formation="line" aria-pressed="false" disabled>┃ แนวแถว</button>
@@ -3938,7 +3941,7 @@ function drawFlag(g,s,P,bob,px,py,S,top){
    ===================================================================== */
 const cv=$('#cv'),ctx=cv.getContext('2d');
 const boardView=$('#boardViewport'),boardStage=$('#boardStage');
-let battleZoom=1,boardPan=false,boardTap=null,selectionBox=null;
+let battleZoom=1,boardPan=false,boardTap=null,selectionBox=null,flankPicking=false;
 let cell=44,dpr=1,bgCanvas=null,terrain=[],SG=null,siteId='plain';
 let pieces=[],selPiece=null,selectedUnits=[],wholeArmy=false,phase='none',B=null,speed=1,battleFoe=null,battleOpts={};
 function distSeg(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy||1;let t=((px-ax)*dx+(py-ay)*dy)/L;t=Math.max(0,Math.min(1,t));return Math.hypot(px-ax-t*dx,py-ay-t*dy);}
@@ -4122,11 +4125,39 @@ function drawGrid(alpha){ctx.strokeStyle=`rgba(0,0,0,${alpha})`;ctx.lineWidth=1;
   for(let r=1;r<ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*cell+.5);ctx.lineTo(COLS*cell,r*cell+.5);ctx.stroke();}}
 function drawGates(){for(const g of SG.gates){if(g.broken)continue;const x=g.c*cell,y=g.r*cell;
   ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(x+cell*.12,y-2,cell*.76,5);ctx.fillStyle=g.hp/g.max>.5?'#d8b25a':'#e2553f';ctx.fillRect(x+cell*.12,y-2,cell*.76*Math.max(0,g.hp/g.max),5);}}
+function plannedRoute(p,c,r,fromC=p.c,fromR=p.r){
+  if(c===fromC&&r===fromR)return null;
+  return gridPath(fromC,fromR,c,r,p);
+}
+function drawTacticalPlan(){
+  ctx.save();
+  for(const p of selectedUnits){
+    if(p.ord!=='volley')continue;
+    ctx.strokeStyle='#ffcf87';ctx.lineWidth=1.4;ctx.setLineDash([5,5]);ctx.beginPath();
+    ctx.arc((p.c+.5)*cell,(p.r+.5)*cell,shootRange(p.type,ter(p.c,p.r))*cell,0,2*Math.PI);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for(const p of pieces){
+    if(p.side!=='blue'||!p.flank)continue;
+    const path=plannedRoute(p,p.flank.c,p.flank.r);
+    if(!path?.length)continue;
+    ctx.globalAlpha=selectedUnits.includes(p)?1:.67;
+    ctx.strokeStyle='#f9d68a';ctx.lineWidth=2;ctx.beginPath();
+    const point=i=>[(i%COLS+.5)*cell,(Math.floor(i/COLS)+.5)*cell];
+    ctx.moveTo(...point(path[0]));
+    for(const i of path.slice(1))ctx.lineTo(...point(i));
+    ctx.stroke();
+    const [x,y]=point(path.at(-1)),[px,py]=point(path.at(-2)),a=Math.atan2(y-py,x-px),len=Math.max(6,cell*.2);
+    ctx.beginPath();ctx.moveTo(x-len*Math.cos(a-.55),y-len*Math.sin(a-.55));ctx.lineTo(x,y);ctx.lineTo(x-len*Math.cos(a+.55),y-len*Math.sin(a+.55));ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawDeploy(){
   ctx.drawImage(bgCanvas,0,0,cell*COLS,cell*ROWS);drawGrid(.14);
   ctx.fillStyle='rgba(80,140,230,.12)';ctx.fillRect(BLUE_EDGE*cell,0,cell*DEPLOY,ROWS*cell);
   ctx.strokeStyle=SIDE.blue.txt;ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.strokeRect(BLUE_EDGE*cell+1.5,1.5,cell*DEPLOY-3,ROWS*cell-3);ctx.setLineDash([]);
-  if(selPiece){
+  drawTacticalPlan();
+  if(selPiece&&!flankPicking){
     ctx.fillStyle='rgba(255,225,151,.65)';
     for(let r=0;r<ROWS;r++)for(let c=BLUE_EDGE;c<COLS;c++){
       if(pieces.some(p=>p.c===c&&p.r===r)||!passFor(c,r,'blue',selPiece.type))continue;
@@ -4139,7 +4170,7 @@ function drawDeploy(){
     const sl=slotsFor(p),R=rng(p.c*31+p.r*7+1),face=p.side==='blue'?Math.PI:0,pal=SIDE[p.side];
     const men=sl.map((q,i)=>({x:(p.c+.5+q[0])*cell,y:(p.r+.6+q[1])*cell,i,mir:R()<.5?-1:1,skin:Math.floor(R()*4)})).sort((a,b)=>a.y-b.y);
     const bearer=men.reduce((a,b)=>(p.side==='blue'?b.x>a.x:b.x<a.x)?b:a).i;
-    for(const q of men)drawMan(ctx,q.x,q.y,cell/33,p.side,p.type,{face,mir:q.mir,skin:q.skin,pal,flag:q.i===bearer?(p.ord==='hold'?'hold':'side'):null,t});
+    for(const q of men)drawMan(ctx,q.x,q.y,cell/33,p.side,p.type,{face,mir:q.mir,skin:q.skin,pal,flag:q.i===bearer?(p.ord==='hold'||p.ord==='volley'?'hold':'side'):null,t});
     ctx.font=`700 ${Math.round(cell*.24)}px ${FONT()}`;ctx.textAlign='center';ctx.textBaseline='middle';
     const lbl=p.type==='gen'?'แม่ทัพ':p.type==='off'?(offById(p.oid)||{name:'ขุนพล'}).name:String(p.n);ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.7)';ctx.strokeText(lbl,(p.c+.5)*cell,(p.r+.93)*cell);ctx.fillStyle=p.gar?'#f0d68a':'#fff';ctx.fillText(lbl,(p.c+.5)*cell,(p.r+.93)*cell);
   }
@@ -4205,7 +4236,7 @@ function beginBattle(foe,opts){
   boardView.scrollLeft=boardView.scrollTop=0;boardView.classList.remove('panning');
   $('#bPan').setAttribute('aria-pressed','false');refreshZoomButtons();resizeBoard();
   battlePlan=buildBattlePlan(foe);pieces=[...battlePlan.blue[0],...(battlePlan.red[0]||[])];
-  selPiece=null;selectedUnits=[];wholeArmy=false;selectionBox=null;phase='deploy';$('#deployBar').hidden=false;$('#fightBar').hidden=true;
+  selPiece=null;selectedUnits=[];wholeArmy=false;selectionBox=null;flankPicking=false;phase='deploy';$('#deployBar').hidden=false;$('#fightBar').hidden=true;
   $('#battlePhase').textContent='จัดทัพก่อนรบ';$('#battleMode').textContent=trial?'สนามทดสอบ':'แคมเปญ';
   renderBtop();renderDeployRoster();$('#battleScreen').scrollTop=0;
 }
@@ -4219,27 +4250,50 @@ function renderDeployRoster(){
   }));
   selectUnit(null);
 }
+const DEPLOY_ORDERS={atk:'บุก',hold:'รักษาแนว',volley:'ระดมยิง',flank:'อ้อมตี'};
+const canFlank=p=>!ART[p.type]&&p.type!=='gen';
+function updateFlankButton(){
+  const b=$('#bFlank');
+  b.disabled=!selectedUnits.some(canFlank);
+  b.textContent=flankPicking?'ยกเลิกปักจุด':'ปักจุดอ้อมตี';
+  b.setAttribute('aria-pressed',flankPicking||selectedUnits.some(p=>p.ord==='flank'));
+}
+function setFlankPoint(c,r){
+  const units=selectedUnits.filter(canFlank);
+  if(units.some(p=>!plannedRoute(p,c,r))){
+    $('#deployStatus').textContent='บางกองไปไม่ถึงจุดนี้ · เลือกพื้นที่เดินได้หรือเลือกกองใหม่';
+    return;
+  }
+  for(const p of units){p.ord='flank';p.flank={c,r};}
+  selectUnits(selectedUnits,`ปักจุดอ้อมตี ${units.length} กอง · วิ่งตามเส้นบนแผนที่ก่อนเข้ารบ`,wholeArmy);
+}
 function selectUnit(p,message){selectUnits(p?[p]:[],message);}
 function selectUnits(units,message,all=false){
-  selectedUnits=units;wholeArmy=all;selPiece=units.length===1?units[0]:null;
+  flankPicking=false;selectedUnits=units;wholeArmy=all;selPiece=units.length===1?units[0]:null;
   const mine=pieces.filter(p=>p.side==='blue');
   Array.from($('#unitList').children).forEach((b,i)=>b.setAttribute('aria-pressed',units.includes(mine[i])));
   for(const [id,ord] of [['bAttack','atk'],['bHold','hold']]){
     const b=$('#'+id);b.disabled=!units.length;b.setAttribute('aria-pressed',!!units.length&&units.every(p=>p.ord===ord));
   }
+  const guns=units.filter(p=>p.type==='gun');
+  $('#bVolley').disabled=!guns.length;
+  $('#bVolley').setAttribute('aria-pressed',!!guns.length&&guns.every(p=>p.ord==='volley'));
+  updateFlankButton();
   document.querySelectorAll('[data-formation]').forEach(b=>{
     b.disabled=!selPiece||selPiece.n<=1||!!ART[selPiece.type];b.setAttribute('aria-pressed',selPiece?.formation===b.dataset.formation);
   });
   $('#deployStatus').textContent=message||(all?'เลือกทั้งทัพ · คำสั่งจะใช้กับกำลังสำรองด้วย':selPiece
-    ?`${deployName(selPiece)} · ${selPiece.ord==='hold'?'ตั้งรับ':'บุก'} · แตะช่องมีจุดเพื่อย้าย`
-    :units.length?`เลือก ${units.length} กอง · สั่งบุกหรือตั้งรับพร้อมกันได้`:'แตะกองทหาร หรือลากกรอบเพื่อเลือกหลายกอง');
+    ?`${deployName(selPiece)} · ${DEPLOY_ORDERS[selPiece.ord]} · แตะช่องมีจุดเพื่อย้าย`
+    :units.length?`เลือก ${units.length} กอง · เลือกคำสั่งด้านล่าง`:'แตะกองทหาร หรือลากกรอบเพื่อเลือกหลายกอง');
   if(phase==='deploy'){drawDeploy();window.FX&&FX.dirty();}
 }
 function setDeployOrder(ord){
-  if(!selectedUnits.length)return;
-  for(const p of selectedUnits)p.ord=ord;
-  if(wholeArmy)for(const wave of battlePlan.blue.slice(1))for(const p of wave)p.ord=ord;
-  const status=`สั่ง${ord==='hold'?'ตั้งรับ':'บุก'} · ${wholeArmy?'ทั้งทัพและกำลังสำรอง':selectedUnits.length+' กอง'}`;
+  const canOrder=p=>ord!=='volley'||p.type==='gun';
+  const eligible=selectedUnits.filter(canOrder);
+  if(!eligible.length)return;
+  const reserves=wholeArmy?battlePlan.blue.slice(1).flat().filter(canOrder):[];
+  for(const p of [...eligible,...reserves]){p.ord=ord;p.flank=null;}
+  const status=`สั่ง${DEPLOY_ORDERS[ord]} · ${eligible.length} กอง${reserves.length?` และกำลังสำรอง ${reserves.length} กอง`:''}`;
   selectUnits(selectedUnits,status,wholeArmy);
 }
 $('#bSelectAll').onclick=()=>selectUnits(pieces.filter(p=>p.side==='blue'),null,true);
@@ -4249,7 +4303,17 @@ document.querySelectorAll('[data-formation]').forEach(b=>b.onclick=()=>{
 });
 $('#bAttack').onclick=()=>setDeployOrder('atk');
 $('#bHold').onclick=()=>setDeployOrder('hold');
+$('#bVolley').onclick=()=>setDeployOrder('volley');
+$('#bFlank').onclick=()=>{
+  if(flankPicking){selectUnits(selectedUnits,null,wholeArmy);return;}
+  flankPicking=true;boardPan=false;
+  $('#bPan').setAttribute('aria-pressed','false');boardView.classList.remove('panning');
+  updateFlankButton();
+  $('#deployStatus').textContent='แตะจุดอ้อมตีบนสนาม · ใช้กับกองที่ลงสนามและเดินอ้อมได้';
+  drawDeploy();window.FX&&FX.dirty();
+};
 $('#bAuto').onclick=()=>{pieces=[...autoDeploy('blue',battlePlan.blue[0].map(p=>p.group)),...pieces.filter(p=>p.side==='red')];renderDeployRoster();selectUnit(null,'จัดทัพใหม่แล้ว · แตะกองทหารเพื่อแก้ตำแหน่ง');};
+function keepsFlankRoute(p,c,r){return !p.flank||!!plannedRoute(p,p.flank.c,p.flank.r,c,r);}
 function boardPoint(e){
   const r=cv.getBoundingClientRect();
   return {x:(e.clientX-r.left)*COLS*cell/r.width,y:(e.clientY-r.top)*ROWS*cell/r.height};
@@ -4283,11 +4347,14 @@ cv.addEventListener('pointerup',e=>{
   }
   if(tap.moved)return;
   const p=boardPoint(e),c=Math.floor(p.x/cell),r=Math.floor(p.y/cell);
-  if(!inB(c,r))return;const at=pieces.find(p=>p.c===c&&p.r===r);
+  if(!inB(c,r))return;
+  if(flankPicking){setFlankPoint(c,r);return;}
+  const at=pieces.find(p=>p.c===c&&p.r===r);
   if(at&&at.side==='blue'){
-    if(selPiece===at){setDeployOrder(at.ord==='hold'?'atk':'hold');return;}
+    if(selPiece===at)return;
     if(!selPiece){selectUnit(at);return;}
     if(!passFor(c,r,'blue',selPiece.type)||!passFor(selPiece.c,selPiece.r,'blue',at.type)){selectUnit(selPiece,'สลับไม่ได้ · ทหารกองหนึ่งยืนบนพื้นที่นั้นไม่ได้');return;}
+    if(!keepsFlankRoute(selPiece,c,r)||!keepsFlankRoute(at,selPiece.c,selPiece.r)){selectUnit(selPiece,'ตำแหน่งใหม่ไปไม่ถึงจุดอ้อมตีเดิม');return;}
     const sc=selPiece.c,sr=selPiece.r;selPiece.c=c;selPiece.r=r;at.c=sc;at.r=sr;
     selectUnit(null,'สลับตำแหน่งแล้ว · เลือกกองถัดไปได้เลย');return;
   }
@@ -4296,6 +4363,7 @@ cv.addEventListener('pointerup',e=>{
   if(at||!passFor(c,r,'blue',selPiece.type)){
     selectUnit(selPiece,ter(c,r)==='W'?'บนกำแพงใช้ได้เฉพาะทหารธนูและทหารปืน':'ช่องนี้วางทหารไม่ได้ · เลือกช่องที่มีจุด');return;
   }
+  if(!keepsFlankRoute(selPiece,c,r)){selectUnit(selPiece,'ตำแหน่งใหม่ไปไม่ถึงจุดอ้อมตีเดิม');return;}
   selPiece.c=c;selPiece.r=r;selectUnit(null,'ย้ายตำแหน่งแล้ว · เลือกกองถัดไปได้เลย');
 });
 $('#bFight').onclick=()=>{initAudio();startBattle();};
@@ -4424,7 +4492,9 @@ function startBattle(){
 function addBattleGroups(groups){
   for(const p of groups){
     const ri=B.regs.length;
-    const reg={id:ri,side:p.side,type:p.type,tid:p.tid,oid:p.oid,src:p.src,gar:p.gar,eng:p.ord!=='hold',rout:false,men:[],routChk:1,chk:0,enteredAt:B.time};B.regs.push(reg);const R=rng(p.c*31+p.r*7+1);
+    const order=p.ord||'atk',path=p.flank?plannedRoute(p,p.flank.c,p.flank.r):null;
+    const route=path?.slice(1).map(i=>[i%COLS+.5,Math.floor(i/COLS)+.5]);
+    const reg={id:ri,order,route,nextVolley:0,side:p.side,type:p.type,tid:p.tid,oid:p.oid,src:p.src,gar:p.gar,eng:order!=='hold'&&order!=='volley',rout:false,men:[],routChk:1,chk:0,enteredAt:B.time};B.regs.push(reg);const R=rng(p.c*31+p.r*7+1);
     const gs=G.gen.st,isG=p.tid==='gen',isO=p.tid==='off',mine=p.side==='blue'&&!isG&&!isO,oo=isO&&offById(p.oid);
     const T=isO?{hp:(1+oo.lv*.06)*(1+.15*oo.st.end),atk:offMul(oo)*(1+.08*oo.st.str)}:isG?{hp:(1+G.gen.lv*.07)*(1+.15*gs.end)*(1+.15*G.gear.arm),atk:(1+G.gen.lv*.05)*(1+.12*gs.str)*(1+.12*G.gear.wpn)}:TROOPS[p.tid];
     const dr=mine?(G.drill[drillKey(p.type)]||0):0,hpM=1+.06*dr,atkX=(1+.06*dr)*(mine?1+.1*G.eq.wpn:1);
@@ -4436,7 +4506,7 @@ function addBattleGroups(groups){
         hp:st.hp*T.hp*hpM*training*(.9+Math.random()*.2),atkM:T.atk*atkX*training,arm,sta:1,wound:0,guard:false,arrows:0,spdM:isG?1+.08*G.gear.horse:1,face:p.side==='blue'?Math.PI:0,mir:R()<.5?-1:1,skin:Math.floor(R()*4),
         tgt:null,rt:Math.random()*.4,cd:Math.random()*.8,swing:-1,pend:null,aim:-1,wp:null,pathT:0,charge:0,run:0,
         alive:true,dying:-1,flash:0,fight:false,moving:false,react:Math.random()*.6};
-      m.max=m.hp;B.men.push(m);reg.men.push(m);});
+      m.max=m.hp;m.post={x:m.x,y:m.y};m.routeAt=0;B.men.push(m);reg.men.push(m);});
   }
 }
 function aliveCount(s){return B?B.men.filter(m=>m.alive&&m.side===s).length:0;}
@@ -4467,6 +4537,41 @@ function gateAssault(m,dt){
 function breakGate(g,fast){g.broken=true;terrain[g.r][g.c]='r';buildBg();for(const m of B.men){m.wp=null;m.pathT=0;m.nopath=false;}
   for(const r of B.regs)r.eng=true;
   if(!fast){log('ประตูเมืองพังแล้ว! ทหารกรูกันเข้าไป');banner('ประตูพัง!');B.shake=performance.now()+400;sfx('thud');sfx('charge');for(let i=0;i<14;i++)dust((g.c+.5)*cell,(g.r+.6)*cell,true);window.FX&&FX.gate((g.c+.5)*cell,(g.r+.6)*cell);}}
+const shootRange=(type,tile)=>MS[type].range+((tile==='h'||tile==='W')?1:0);
+const holdsGround=g=>g.side==='blue'&&(g.order==='hold'||g.order==='volley');
+function volleyTarget(m){
+  const range=shootRange(m.type,terAt(m.x,m.y));
+  let target=null,closest=range;
+  for(const e of B.active){
+    if(!e.alive||e.side===m.side)continue;
+    const d=dist(m,e);if(d>.55&&d<=closest){target=e;closest=d;}
+  }
+  return target;
+}
+function volleyOrder(g,units,fast){
+  if(g.order!=='volley'||g.rout||B.time<g.nextVolley)return;
+  const ready=units.filter(m=>m.react<=0&&m.aim<0);
+  let fired=false;
+  for(const m of ready){
+    const target=volleyTarget(m);if(!target)continue;
+    m.aimTarget=target;m.aim=0;m.cd=MS.gun.cd;
+    m.face=Math.atan2(target.y-m.y,target.x-m.x);fired=true;
+  }
+  g.nextVolley=B.time+(fired?MS.gun.cd:.18);
+  if(fired&&!fast)log(`${regName(g)} ระดมยิง!`);
+}
+function followFlank(m,g,d,dt){
+  let wp=g.route?.[m.routeAt];
+  if(!wp)return false;
+  if(Math.hypot(wp[0]-m.x,wp[1]-m.y)<.36){m.routeAt++;wp=g.route[m.routeAt];}
+  if(!wp||d<=reachOf(m,m.tgt))return false;
+  if(!steer(m,wp[0],wp[1],dt,MOUNT[m.type]?.9:.72))brake(m,dt);
+  return true;
+}
+function holdPost(m,dt){
+  if(dist(m,m.post)>.25&&steer(m,m.post.x,m.post.y,dt,.55))return;
+  brake(m,dt);
+}
 function think(m,dt,fast,crowd){
   const st=MS[m.type],g=B.regs[m.reg];m.cd-=dt;m.flash-=dt;m.fight=false;
   if(m.swing>=0){m.swing+=dt/.4;if(m.swing>=1)m.swing=-1;}
@@ -4474,33 +4579,48 @@ function think(m,dt,fast,crowd){
     if(p.gate){const gt=p.gate;if(!gt.broken){gt.hp-=st.atk*m.atkM*(m.type==='cav'?.6:1)*1.1;if(!fast){sparks((gt.c+.5)*cell,(gt.r+.7)*cell,true);sfx('thud');}if(gt.hp<=0)breakGate(gt,fast);}}
     else if(p.d.alive&&dist(m,p.d)<=reachOf(m,p.d)*1.4)strike(m,p.d,p.charge,fast);}}
   if(m.recoil>0)m.recoil-=dt*2;
-  if(m.aim>=0){m.aim+=dt/AIMT[m.type];if(m.aim>=1){fire(m,fast);m.aim=-1;}}
+  if(m.aim>=0){m.aim+=dt/AIMT[m.type];if(m.aim>=1){
+    if(g.order!=='volley')fire(m,fast);
+    else{
+      const target=m.aimTarget?.alive&&dist(m,m.aimTarget)<=shootRange(m.type,terAt(m.x,m.y))?m.aimTarget:volleyTarget(m);
+      if(target){m.face=Math.atan2(target.y-m.y,target.x-m.x);fireGun(m,fast,target);}
+    }
+    m.aim=-1;m.aimTarget=null;
+  }}
   m.guard=false;m.cheer=false;
   if(B.over&&m.side===B.winner){m.cheer=true;m.swing=-1;m.aim=-1;m.pend=null;m.fight=false;brake(m,dt);return;}
   if(g.rout){const homeX=m.side==='blue'?COLS+.5:-.5,hc=m.side==='blue'?COLS-1:0;const tx=Math.floor(m.x)===hc?homeX:hc+.5;if(!steer(m,tx,m.y,dt,1.15))brake(m,dt);return;}
   if(m.react>0){m.react-=dt;brake(m,dt);return;}
+  if(g.order==='volley'&&m.aim>=0){
+    if(m.aimTarget?.alive)faceTo(m,m.aimTarget,dt);
+    brake(m,dt);m.fight=true;return;
+  }
   m.rt-=dt;if(m.rt<=0||!m.tgt||!m.tgt.alive){m.tgt=pickTarget(m,crowd);m.rt=.35+Math.random()*.35;}
   const t=m.tgt;if(!t){brake(m,dt);return;}const d=dist(m,t);
-  if(m.tid==='gen'&&!B.over){const mates=B.men.filter(x=>x.alive&&x.side===m.side&&x.tid!=='gen'&&!B.regs[x.reg].rout),last=Math.max(2,Math.round(B.startN[m.side]*.12));
+  const holding=holdsGround(g);
+  if(followFlank(m,g,d,dt))return;
+  if(m.tid==='gen'&&!B.over&&!holding){const mates=B.men.filter(x=>x.alive&&x.side===m.side&&x.tid!=='gen'&&!B.regs[x.reg].rout),last=Math.max(2,Math.round(B.startN[m.side]*.12));
     if(mates.length>last&&d>1.1){const cx=mates.reduce((a,x)=>a+x.x,0)/mates.length,cy=mates.reduce((a,x)=>a+x.y,0)/mates.length;
       const hx=Math.max(.4,Math.min(COLS-.4,cx+(m.side==='blue'?2.2:-2.2))),hy=Math.max(.5,Math.min(ROWS-.5,cy));
       if(Math.hypot(hx-m.x,hy-m.y)>.35){if(!steer(m,hx,hy,dt,.45))brake(m,dt);}else{brake(m,dt);faceTo(m,{x:m.x+(m.side==='blue'?-1:1),y:m.y},dt);}return;}
     if(!m.lastStand&&mates.length<=last){m.lastStand=true;if(!fast&&m.side==='blue'){log(`แม่ทัพ${playerName()}ควบม้าออกศึกเอง!`);banner('แม่ทัพออกศึก!');}}}
   const onWall=SG&&terAt(m.x,m.y)==='W';
   // shield men raise shields while waiting or while arrows are falling on them, until the enemy is at arm's length
-  if(SHIELD[m.type]&&d>.75&&(!g.eng||B.time-(g.arrowT||-9)<2.6))m.guard=true;
+  if(SHIELD[m.type]&&d>.75&&(holding||!g.eng||B.time-(g.arrowT||-9)<2.6))m.guard=true;
   // let beaten men run: foot soldiers don't chase routers far, horsemen only a short way
   if(B.regs[t.reg].rout&&!RANGED[m.type]&&d>(MOUNT[m.type]?2.2:.9)){brake(m,dt);m.rt=Math.min(m.rt,.2);return;}
-  if(ART[m.type]&&SG&&m.side!==SG.def){const gs=SG.gates.filter(q=>!q.broken);
+  if(!holding&&ART[m.type]&&SG&&m.side!==SG.def){const gs=SG.gates.filter(q=>!q.broken);
     if(gs.length){const gt=gs.reduce((a,b)=>Math.hypot(b.c+.5-m.x,b.r+.5-m.y)<Math.hypot(a.c+.5-m.x,a.r+.5-m.y)?b:a);
       brake(m,dt);faceTo(m,{x:gt.c+.5,y:gt.r+.5},dt);m.fight=true;m.aimGate=gt;if(m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}}
   m.aimGate=null;
-  if(RANGED[m.type]&&(d>.55||onWall||ART[m.type])){const rg=st.range+(terAt(m.x,m.y)==='h'||onWall?1:0);
-    if(d<=rg){brake(m,dt);faceTo(m,t,dt);m.fight=true;if(m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}
+  if(RANGED[m.type]&&(d>.55||onWall||ART[m.type])){const rg=shootRange(m.type,terAt(m.x,m.y));
+    if(d<=rg){brake(m,dt);faceTo(m,t,dt);m.fight=true;if(g.order!=='volley'&&m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}
+    if(holding){holdPost(m,dt);return;}
     if(!g.eng||onWall||ART[m.type]){brake(m,dt);return;}
     if(!steer(m,t.x,t.y,dt,m.type==='gun'?.75:.5))brake(m,dt);return;}
   if(d<=reachOf(m,t)){m.fight=true;brake(m,dt);faceTo(m,t,dt);
     if(m.cd<=0&&m.swing<0){m.swing=0;m.cd=st.cd*(.85+Math.random()*.3);m.pend={t:.17,d:t,charge:MOUNT[m.type]&&m.charge>.45};}return;}
+  if(holding){holdPost(m,dt);return;}
   if(!g.eng){brake(m,dt);return;}
   // march at a walk, break into a run only for the last stretch
   const mul=MOUNT[m.type]?(d<3.2?1:.5):(d<1.7?1:.48)*(m.guard?.8:1);
@@ -4515,7 +4635,7 @@ function fireStone(m,fast){const g=m.aimGate,t=m.tgt;if(!g&&(!t||!t.alive))retur
   if(!fast){sfx('thud',m.x);for(let i=0;i<3;i++)dust(m.x*cell,m.y*cell,true);}}
 function muzzle(m,len){return[m.x+Math.cos(m.face)*len,m.y-.28+Math.sin(m.face)*len*.5];}
 function smoke(x,y,n,big){if(!B)return;for(let i=0;i<n&&B.parts.length<900;i++)B.parts.push({k:'smoke',x:x+(Math.random()-.5)*cell*(big?.3:.08),y:y+(Math.random()-.5)*cell*(big?.15:.05),vx:(Math.random()-.5)*.25,vy:-.12-Math.random()*.15,life:1,r:cell*(big?.14:.06)*(1+Math.random()*.6),dec:big?.006:.012});}
-function fireGun(m,fast){const t=m.tgt;if(!t||!t.alive)return;const d=dist(m,t);m.recoil=1;
+function fireGun(m,fast,t=m.tgt){if(!t||!t.alive)return;const d=dist(m,t);m.recoil=1;
   let p=Math.max(.42,.90-d*.075);const tt=terAt(t.x,t.y);if(tt==='f')p*=.7;
   const hit=Math.random()<p;const mx=muzzle(m,.32);
   const ex=hit?t.x:t.x+(Math.random()-.5)*.6,ey=hit?t.y-.1:t.y+(Math.random()-.5)*.4;
@@ -4603,7 +4723,8 @@ function step(dt,fast){
   B.time+=dt;const live=B.active=B.men.filter(m=>m.alive);
   const crowd=new Map();for(const m of live)if(m.tgt&&!RANGED[m.type])crowd.set(m.tgt.id,(crowd.get(m.tgt.id)||0)+1);
   for(const g of B.regs){const al=g.men.filter(m=>m.alive);if(!al.length)continue;g.chk-=dt;
-    if(!g.eng&&g.chk<=0){g.chk=.25;const cx=al.reduce((a,m)=>a+m.x,0)/al.length,cy=al.reduce((a,m)=>a+m.y,0)/al.length;
+    if(!B.over)volleyOrder(g,al,fast);
+    if(!holdsGround(g)&&!g.eng&&g.chk<=0){g.chk=.25;const cx=al.reduce((a,m)=>a+m.x,0)/al.length,cy=al.reduce((a,m)=>a+m.y,0)/al.length;
       if(B.time-g.enteredAt>16||live.some(e=>e.side!==g.side&&Math.abs(e.x-cx)<3.2&&Math.abs(e.y-cy)<3.2))g.eng=true;}
     g.routChk-=dt;
     if(g.routChk<=0&&!B.over&&g.type!=='gen'&&g.type!=='off'){g.routChk=1;const f=al.length/g.men.length;
@@ -4696,7 +4817,7 @@ function drawBattle(now){
     const ch=m.cheer&&m.alive;
     drawMan(ctx,m.x*cell,(m.y-(ch?Math.abs(Math.sin(t*6+m.id))*.07:0))*cell,s,m.side,m.type,{face:m.face,mir:m.mir,skin:m.skin,pal:SIDE[m.side],run:m.moving?m.run:0,swing:ch?((t*1.6+m.id*.37)%1<.5?.05:.2):m.swing,aim:m.aim,recoil:m.recoil,
       ready:ch||m.fight||(MOUNT[m.type]&&m.charge>.3)||(m.tgt&&m.tgt.alive&&dist(m,m.tgt)<1.2),dying:m.alive?-1:m.dying,guard:m.alive&&m.guard,wound:m.wound,
-      flag:m.alive&&g.bearer===m?(g.rout?'rout':!g.eng?'hold':'side'):null,t});}
+      flag:m.alive&&g.bearer===m?(g.rout?'rout':holdsGround(g)||!g.eng?'hold':'side'):null,t});}
   for(const a of B.arrows){
     const [x,y,angle]=arrowPose(a,a.t/a.dur);
     drawArrowShape(ctx,x,y,angle,Math.max(.78,cell/33),a.src.type);
