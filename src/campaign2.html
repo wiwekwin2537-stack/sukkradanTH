@@ -1,4 +1,5 @@
-<title>ศึกกระดาน</title>
+<title>ศึกกระดาน · สนามทดสอบ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /*FONTS*/
@@ -100,6 +101,10 @@ input[type=text]{background:#0c0a08;border:1px solid var(--line);border-radius:9
 .chip{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;box-shadow:0 0 0 1px #0008}
 /* battle */
 #battleScreen{overflow:auto}
+#mapScreen,#battleScreen{max-width:760px}
+#bLeaveTrial{align-self:center;margin-bottom:6px}
+.field-preview{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.field-preview small{color:var(--muted)}
 .btop{padding:9px 12px;display:flex;flex-direction:column;gap:6px}
 .btop .rowx{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
 .who{font-family:var(--display);font-weight:700;font-size:15px}
@@ -144,6 +149,7 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
     <div class="flagrow"><canvas id="flagPrev" width="180" height="120"></canvas><div class="em" id="emblems"></div></div>
     <button class="btn gold big" id="startNew" type="button">เริ่มการเดินทาง</button>
   </div>
+  <div class="panel tcard field-preview"><small>สนามทดสอบ · ลองจัดทัพและดูการรบได้ทันที</small><button class="btn" id="trialBtn" type="button">ทดลองสนามรบ</button></div>
   <button class="btn big" id="contBtn" type="button" hidden>เล่นต่อจากที่บันทึกไว้</button>
 </div>
 
@@ -173,6 +179,7 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
       <button class="sbtn" id="bSkip" type="button">ข้าม</button><button class="sbtn on" id="bSound" type="button">เสียง</button></div>
     <div class="panel log" id="log"></div>
   </div>
+  <button class="btn" id="bLeaveTrial" type="button" hidden>ออกจากสนามทดสอบ</button>
 </div>
 
 <div id="sheet" hidden><div class="sheetbox" id="sheetBox"></div></div>
