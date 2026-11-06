@@ -159,7 +159,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
 .deploy-panel{padding:8px;display:flex;flex-direction:column;gap:7px}
 .deploy-status{margin:0;color:#f2e4c5;font-size:13px;min-height:2.8em}
 .deploy-orders{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.deploy-orders [aria-pressed="true"],.unit-list [aria-pressed="true"]{color:#fbe7b1;background:#524223;border-color:#e9c677;box-shadow:inset 0 -2px #dcb76a}
+.deploy-panel [data-formation][aria-pressed="true"],.deploy-orders [aria-pressed="true"],.unit-list [aria-pressed="true"]{color:#fbe7b1;background:#524223;border-color:#e9c677;box-shadow:inset 0 -2px #dcb76a}
 .unit-list{display:flex;gap:6px;overflow:auto;padding:1px 1px 4px;scrollbar-width:thin}
 .unit-list .btn{flex:none;font-size:12px;padding:5px 9px}
 #bSkip{margin-left:auto}
@@ -247,6 +247,12 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
       <div class="deploy-orders" role="group" aria-label="คำสั่งกองทหาร">
         <button class="btn" id="bAttack" type="button" aria-pressed="false" disabled>บุก</button>
         <button class="btn" id="bHold" type="button" aria-pressed="false" disabled>ตั้งรับ</button>
+      </div>
+      <div class="lbl">รูปขบวน</div>
+      <div class="row" role="group" aria-label="รูปขบวน">
+        <button class="btn grow" type="button" data-formation="line" aria-pressed="false" disabled>┃ แนวแถว</button>
+        <button class="btn grow" type="button" data-formation="column" aria-pressed="false" disabled>━ แถวตอน</button>
+        <button class="btn grow" type="button" data-formation="wedge" aria-pressed="false" disabled>◀ ลิ่ม</button>
       </div>
     </div>
     <div class="row"><button class="btn grow" id="bAuto" type="button">จัดทัพอัตโนมัติ</button><button class="btn gold big grow" id="bFight" type="button">เริ่มรบ!</button></div>

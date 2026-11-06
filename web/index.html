@@ -170,7 +170,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
 .deploy-panel{padding:8px;display:flex;flex-direction:column;gap:7px}
 .deploy-status{margin:0;color:#f2e4c5;font-size:13px;min-height:2.8em}
 .deploy-orders{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.deploy-orders [aria-pressed="true"],.unit-list [aria-pressed="true"]{color:#fbe7b1;background:#524223;border-color:#e9c677;box-shadow:inset 0 -2px #dcb76a}
+.deploy-panel [data-formation][aria-pressed="true"],.deploy-orders [aria-pressed="true"],.unit-list [aria-pressed="true"]{color:#fbe7b1;background:#524223;border-color:#e9c677;box-shadow:inset 0 -2px #dcb76a}
 .unit-list{display:flex;gap:6px;overflow:auto;padding:1px 1px 4px;scrollbar-width:thin}
 .unit-list .btn{flex:none;font-size:12px;padding:5px 9px}
 #bSkip{margin-left:auto}
@@ -259,6 +259,12 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
       <div class="deploy-orders" role="group" aria-label="คำสั่งกองทหาร">
         <button class="btn" id="bAttack" type="button" aria-pressed="false" disabled>บุก</button>
         <button class="btn" id="bHold" type="button" aria-pressed="false" disabled>ตั้งรับ</button>
+      </div>
+      <div class="lbl">รูปขบวน</div>
+      <div class="row" role="group" aria-label="รูปขบวน">
+        <button class="btn grow" type="button" data-formation="line" aria-pressed="false" disabled>┃ แนวแถว</button>
+        <button class="btn grow" type="button" data-formation="column" aria-pressed="false" disabled>━ แถวตอน</button>
+        <button class="btn grow" type="button" data-formation="wedge" aria-pressed="false" disabled>◀ ลิ่ม</button>
       </div>
     </div>
     <div class="row"><button class="btn grow" id="bAuto" type="button">จัดทัพอัตโนมัติ</button><button class="btn gold big grow" id="bFight" type="button">เริ่มรบ!</button></div>
@@ -1864,8 +1870,11 @@ window.ZZFX=ZZFX;window.zzfx=zzfx;window.zzfxWav=buildWavURL;})();
 /* =====================================================================
    DATA
    ===================================================================== */
-const COLS=10, ROWS=10;   // battlefield runs left (enemy) to right (us)
+const COLS=16, ROWS=10, DEPLOY=4, BLUE_EDGE=COLS-DEPLOY, WAVE_SIZE=72;   // battlefield runs left (enemy) to right (us)
 const TROOPS={
+  pike:{n:'พลหอกยาว',type:'pike',tier:3,hp:1.02,atk:1.06,wage:4,price:140,up:[]},
+  xbow:{n:'พลหน้าไม้',type:'xbow',tier:3,hp:1,atk:1.08,wage:4,price:145,up:[]},
+  jav:{n:'พลปาหอก',type:'jav',tier:3,hp:1.08,atk:1,wage:4,price:125,up:[]},
   vil:{n:'ชาวบ้าน',type:'vil',tier:1,hp:.75,atk:.65,wage:1,price:10,up:['rsp','rsw','hun']},
   rsp:{n:'ทหารเกณฑ์หอก',type:'spr',tier:2,hp:.9,atk:.85,wage:2,price:45,up:['spr','lcv']},
   rsw:{n:'ทหารเกณฑ์ดาบ',type:'inf',tier:2,hp:.9,atk:.85,wage:2,price:45,up:['swd','shd']},
@@ -1899,7 +1908,10 @@ const MS={
   vil:{hp:30,atk:9,spd:.62,cd:1.15,reach:.14,rad:.075},
   spr:{hp:28,atk:8,spd:.6,cd:1.1,reach:.17,rad:.075},
   inf:{hp:32,atk:10,spd:.66,cd:.95,reach:.08,rad:.075},
-  arc:{hp:20,atk:9,spd:.62,cd:1.8,reach:.07,rad:.07,range:3.1},
+  arc:{hp:20,atk:9,spd:.62,cd:1.8,reach:.07,rad:.07,range:6.4},
+  xbow:{hp:23,atk:8,spd:.56,cd:3.2,reach:.07,rad:.075,range:5.4},
+  jav:{hp:28,atk:9,spd:.68,cd:2.8,reach:.1,rad:.075,range:3.6},
+  pike:{hp:29,atk:8,spd:.53,cd:1.2,reach:.39,rad:.075},
   gun:{hp:24,atk:6,spd:.6,cd:4.2,reach:.07,rad:.07,range:3.7,shot:30},
   can:{hp:70,atk:4,spd:.22,cd:7.5,reach:.07,rad:.17,range:7.6,shot:55},
   cav:{hp:65,atk:14,spd:1.5,cd:1.2,reach:.1,rad:.13},
@@ -1908,7 +1920,7 @@ const MS={
   cat:{hp:80,atk:4,spd:.18,cd:9.5,reach:.07,rad:.18,range:9,shot:62},
   off:{hp:95,atk:13,spd:1.32,cd:.9,reach:.1,rad:.13}
 };
-const RANGED={arc:1,gun:1,can:1,cat:1},AIMT={arc:.6,gun:.9,can:1.3,cat:1.8};
+const RANGED={arc:1,xbow:1,jav:1,gun:1,can:1,cat:1},AIMT={arc:.6,xbow:.8,jav:.45,gun:.9,can:1.3,cat:1.8};
 const MOUNT={cav:1,gen:1,off:1},ART={can:1,cat:1},SHIELD={shd:.85,inf:.6};
 // how much metal/leather a man wears: chance a blow or arrow glances off
 const ARMOR={vil:0,b1:0,rsp:.12,rsw:.12,hun:.04,b2:.1,b3:.03,b5:.1,b4:.15,spr:.35,lcv:.22,swd:.25,shd:.4,arc:.08,spr4:.5,cav4:.5,swd4:.42,shd4:.55,arc4:.15,gun:.08,gun4:.15,can:.1,cat:.1,gen:.5,off:.4};
@@ -1916,10 +1928,11 @@ const EQC=[0,80,200,450,900],EQN=[0,4,9,16,26],GEARC=[0,200,500,1100],WALLC=[0,2
 const FOOD_BUY={v:2,c:3,k:4},FOOD_SELL={v:1,c:2,k:3};
 const SCHOOL={'เชียงใหม่':'inf','พิษณุโลก':'spr','นครราชสีมา':'cav','กรุงศรีอยุธยา':'gun','นครศรีธรรมราช':'arc','สุโขทัย':'shd','ลำปาง':'arc','นครสวรรค์':'spr','กาญจนบุรี':'inf','อุดรธานี':'cav','สงขลา':'shd','ตาก':'arc'};
 const DRILL_N={inf:'ดาบ',spr:'ทวน',cav:'ทหารม้า',gun:'ปืนและเครื่องยิง',arc:'ธนู',shd:'โล่'};
-const drillKey=t=>t==='can'||t==='cat'?'gun':t;
+const drillKey=t=>({can:'gun',cat:'gun',xbow:'arc',pike:'spr',jav:'spr'}[t]||t);
+const SPECIAL={ayu:'gun',lan:'xbow',sok:'pike',kor:'jav',nak:'arc'};
 const OFF_NAMES=['ขุนศรี','หมื่นหาญ','นายมั่น','นายจัน','ขุนทอง','หมื่นเพชร','นายแก้ว','ขุนเดช','พันศึก','นายอิน','นายเมือง','หมื่นเหล็ก','ขุนพิชัย','นายคง','หมื่นณรงค์','นายบุญมา','ขุนแกล้ว','หมื่นสิงห์'];
 const TRAITS={war:{n:'นักรบ',d:'ตีแรง ชนะศึกง่ายขึ้น'},lead:{n:'ผู้นำ',d:'คุมทหารได้มากขึ้น 4 นาย'},hunt:{n:'นักล่า',d:'เดินทัพเร็ว ลาดตระเวนหาโจรได้ไกล'},guard:{n:'ผู้พิทักษ์',d:'รักษาเมืองแข็งแกร่งขึ้นมาก'}};
-const VS={gun:{cav:1.3},can:{},cat:{},off:{},spr:{cav:2.2},inf:{spr:1.3,shd:1.3,vil:1.2},arc:{},cav:{arc:1.6,inf:1.2,vil:1.4},shd:{},vil:{},gen:{}};
+const VS={xbow:{},jav:{},pike:{cav:2.6},gun:{cav:1.3},can:{},cat:{},off:{},spr:{cav:2.2},inf:{spr:1.3,shd:1.3,vil:1.2},arc:{},cav:{arc:1.6,inf:1.2,vil:1.4},shd:{},vil:{},gen:{}};
 const COLORS=['#3a74c4','#c23b2c','#2f8a4a','#36a3d9','#d9d2bd','#e07a2a'];
 const EMBLEMS=[['none','เรียบ'],['star','ดาว'],['sun','ตะวัน'],['stripe','แถบ'],['cross','กากบาท']];
 const FACTIONS=[
@@ -1933,7 +1946,7 @@ const IND={id:'ind',name:'เมืองอิสระ',short:'อิสระ
 const TOWN_OWNER={'กรุงศรีอยุธยา':'ayu','นครสวรรค์':'ayu','กาญจนบุรี':'ayu','เพชรบุรี':'ayu','เชียงใหม่':'lan','ลำปาง':'lan','น่าน':'lan',
   'พิษณุโลก':'sok','สุโขทัย':'sok','นครราชสีมา':'kor','ขอนแก่น':'kor','อุดรธานี':'kor','นครศรีธรรมราช':'nak','สงขลา':'nak'};
 const REL_TXT={war:'ทำสงคราม',peace:'สงบศึก',ally:'พันธมิตร',gone:'ล่มสลาย'};
-const SITE_NAME={plain:'ทุ่งราบ',river:'ริมแม่น้ำ',hills:'เนินเขา',forest:'ป่าทึบ',coast:'ชายฝั่งทะเล',siege:'หน้ากำแพงเมือง',defend:'ป้องกันกำแพงเมือง'};
+const SITE_NAME={village:'หน้าหมู่บ้าน',plain:'ทุ่งราบ',river:'ริมแม่น้ำ',hills:'เนินเขา',forest:'ป่าทึบ',coast:'ชายฝั่งทะเล',siege:'หน้ากำแพงเมือง',defend:'ป้องกันกำแพงเมือง'};
 
 const THAI=[[97.4,18.6],[97.8,19.6],[98.5,19.8],[99.3,20.1],[99.9,20.45],[100.2,20.35],[100.5,19.6],[101.2,19.6],[101.1,18.5],[101.0,17.8],[101.7,17.9],[102.7,17.95],[103.4,18.45],[104.0,17.8],[104.8,17.45],[104.75,16.5],[105.6,15.7],[105.45,14.4],[104.0,14.35],[103.0,14.35],[102.5,13.6],[102.35,12.6],[102.95,11.65],[102.4,12.15],[101.7,12.7],[100.95,12.65],[100.9,13.4],[100.55,13.5],[100.0,13.35],[99.95,12.6],[99.75,11.8],[99.35,10.7],[99.2,10.0],[99.3,9.25],[99.95,9.15],[100.0,8.45],[100.35,7.5],[100.65,7.15],[101.3,6.9],[102.1,6.2],[101.75,5.75],[101.05,6.0],[100.4,6.5],[100.1,6.45],[99.7,6.95],[99.45,7.45],[99.05,7.9],[98.6,8.05],[98.3,7.85],[98.25,8.7],[98.4,9.5],[98.6,10.15],[98.95,10.75],[99.45,11.6],[99.2,12.35],[99.15,13.15],[98.65,14.0],[98.25,14.85],[98.55,15.35],[98.6,16.3],[98.55,16.9],[97.9,17.6],[97.7,18.3]];
 const RIVERS=[
@@ -1993,20 +2006,25 @@ function save(){
 function load(){try{const s=localStorage.getItem(SAVE);return s?JSON.parse(s):null;}catch(e){return null;}}
 function facOf(id){if(id==='p')return{id:'p',name:SIDE.blue.name,short:'เรา',color:G.gen.color};if(!id||id==='ind')return IND;return FACTIONS.find(f=>f.id===id)||IND;}
 function randomTroops(n,pool){const m={};for(let i=0;i<n;i++){const id=pickR(pool);m[id]=(m[id]||0)+1;}return Object.entries(m).map(([id,n])=>({id,n,w:0}));}
+const TOWN_SIZE={v:[20,50],c:[100,500],k:[220,500]};
+const townTax=t=>TAX[t.s]+(t.market||0)*30;
 function makeGarrison(t){
-  if(t.own==='ind')return randomTroops(ri(9,14),['vil','vil','vil','rsp','rsw','hun']);
-  if(t.s==='k')return randomTroops(ri(26,38),['rsp','rsw','hun','spr','swd','arc','shd','gun','spr','lcv','swd4','arc4','gun']).concat([{id:'can',n:ri(1,2),w:0}],Math.random()<.5?[{id:'cat',n:1,w:0}]:[]);
-  return randomTroops(ri(12,18),['vil','rsp','rsw','hun','rsp','swd','arc']);
+  const [min,max]=TOWN_SIZE[t.s];
+  if(t.s==='v')return [{id:'vil',n:ri(min,max),w:0}];
+  const pool=t.s==='k'?['rsp','rsw','hun','spr','swd','arc','shd','gun','lcv','swd4','arc4']:['vil','rsp','rsw','hun','spr','swd','arc'];
+  if(SPECIAL[t.own])pool.push(SPECIAL[t.own],SPECIAL[t.own],SPECIAL[t.own]);
+  const n=ri(min,max);
+  return t.s==='k'?randomTroops(n-2,pool).concat([{id:'can',n:2,w:0}]):randomTroops(n,pool);
 }
 function initWorld(){
-  G.towns.forEach(t=>{if(t.s!=='v'){t.own=TOWN_OWNER[t.n]||'ind';t.gar=makeGarrison(t);}else{t.own=null;t.gar=[];}});
+  G.towns.forEach(t=>{if(t.s!=='v'){t.own=TOWN_OWNER[t.n]||'ind';t.gar=makeGarrison(t);}else{t.own=null;t.gar=makeGarrison(t);}});
   G.rel={};FACTIONS.forEach(f=>G.rel[f.id]='peace');
   G.armies=[];G.aid=1;
   FACTIONS.forEach(f=>{for(let i=0;i<2;i++)spawnArmy(f.id);});
-  G.v=2;
+  G.v=3;
 }
 function staticLinks(){
-  const forts=G.towns.map((t,i)=>({t,i})).filter(o=>o.t.s!=='v');
+  const forts=G.towns.map((t,i)=>({t,i})).filter(o=>o.t.s!=='v'&&!o.t.founded);
   G.towns.forEach(t=>{if(t.s==='v'){let b=null,bd=1e9;for(const o of forts){const d=Math.hypot(o.t.x-t.x,o.t.y-t.y);if(d<bd){bd=d;b=o.i;}}t.fort=b;}});
 }
 const ownerOf=t=>t.s==='v'?G.towns[t.fort].own:t.own;
@@ -2021,22 +2039,25 @@ function newGame(name,color,emblem){
   for(let i=0;i<12;i++)spawnBandit();
   terrDirty=true;save();
 }
-function upgradeSave(){if(!G.v){staticLinks();initWorld();}staticLinks();fixState();terrDirty=true;}
+function upgradeSave(){if(!G.v){staticLinks();initWorld();}staticLinks();fixState();G.v=3;terrDirty=true;}
 function fixState(){if(G.x!=null&&!onLand(G.x,G.y))putOnLand(G);for(const p of G.parties||[])if(!onLand(p.x,p.y))putOnLand(p);const g=G.gen;if(!g.st)g.st={str:0,end:0,lead:0};if(g.pts==null)g.pts=(g.lv-1)*2;if(g.tr==null)g.tr=0;
   if(G.food==null)G.food=30;if(G.herb==null)G.herb=0;if(!G.eq)G.eq={arm:0,wpn:0};if(!G.gear)G.gear={wpn:0,arm:0,horse:0};if(!G.drill)G.drill={};
-  G.towns.forEach(t=>{if(t.wall==null)t.wall=0;});
+  G.towns.forEach(t=>{if(t.wall==null)t.wall=0;if(t.s==='v'&&(!t.gar||(G.v<3&&!t.gar.length)))t.gar=makeGarrison(t);});
   if(!G.officers)G.officers=[];if(!G.parties)G.parties=[];if(!G.oid)G.oid=1;if(!G.pid)G.pid=1;}
 function restock(t){
   if(t.s==='v')t.stock={vil:ri(3,7)};
   if(t.s==='c')t.stock={vil:ri(2,4),rsp:ri(1,3),rsw:ri(1,3),hun:ri(1,3)};
   if(t.s==='k')t.stock={rsw:ri(1,3),spr:ri(1,3),swd:ri(1,3),shd:ri(0,2),arc:ri(1,3),gun:ri(1,3),lcv:ri(0,2),can:ri(0,1),cat:ri(0,1)};
+  const specialty=SPECIAL[t.own]||SPECIAL[TOWN_OWNER[t.n]];
+  if(t.s!=='v'&&specialty)t.stock[specialty]=ri(4,10);
+  if(t.barracks)t.stock.vil=(t.stock.vil||0)+t.barracks*18;
   if(t.s!=='v')t.hero=Math.random()<.4?makeOfficer(Math.min(6,ri(1,2)+Math.floor((G?G.day:0)/14))):null;
   t.rs=G?G.day:0;
 }
 const armyCount=()=>G.army.reduce((a,e)=>a+e.n,0);
 const fitCount=()=>G.army.reduce((a,e)=>a+e.n-e.w,0);
 const prisCount=()=>G.pris.reduce((a,e)=>a+e.n,0);
-const limit=()=>6+G.gen.lv*4+((G.gen.st&&G.gen.st.lead)||0)*2;
+const limit=()=>Math.min(1000,6+G.gen.lv*4+((G.gen.st&&G.gen.st.lead)||0)*2+myTowns().reduce((n,t)=>n+(t.barracks||0)*70,0));
 const partyMen=()=>(G.parties||[]).reduce((a,p)=>a+total(p.troops),0);
 const eatPerDay=()=>Math.ceil((armyCount()+partyMen()+1+prisCount()*.5)/6);
 /* ---- officers (ขุนพล): hire, level up, lead detachments ---- */
@@ -2070,10 +2091,10 @@ function spawnBandit(cx,cy,rmin,rmax,size){
 function spawnArmy(fac){
   const F=facOf(fac);const home=G.towns.filter(t=>t.s!=='v'&&t.own===fac);if(!home.length)return;
   const h=home.find(t=>t.n===F.cap)||home[0];
-  const n=Math.round(rnd(14,22)+G.day*.35);
+  const n=Math.round(rnd(18,30)+G.day*.45);
   const pool=['rsp','rsw','hun','rsp','rsw','spr','swd','arc','shd','lcv'].concat(G.day>12?['gun','gun']:[],G.day>25?['spr4','swd4','arc4','cav4','gun4']:[]);
   const extra=G.day>20&&Math.random()<.5?[{id:Math.random()<.5?'can':'cat',n:1,w:0}]:[];
-  G.armies.push({id:G.aid++,fac,name:'ทัพ'+F.short,x:h.x+rnd(-20,20),y:h.y+rnd(10,25),hx:h.x,hy:h.y,tx:h.x,ty:h.y,cool:0,mission:null,troops:randomTroops(n,pool).concat(extra)});
+  G.armies.push({id:G.aid++,fac,name:'ทัพ'+F.short,x:h.x+rnd(-20,20),y:h.y+rnd(10,25),hx:h.x,hy:h.y,tx:h.x,ty:h.y,cool:0,mission:null,troops:randomTroops(n,pool.concat(SPECIAL[fac],SPECIAL[fac])).concat(extra)});
 }
 
 /* =====================================================================
@@ -2186,6 +2207,20 @@ function drawTownAt(g,t,x,y,k,label){
     for(const tx of[-16,13]){g.fillStyle='#b6ae96';g.fillRect(x+tx*k,y-17*k,5*k,19*k);g.fillStyle='#7a2a1a';g.beginPath();g.moveTo(x+(tx-1)*k,y-17*k);g.lineTo(x+(tx+2.5)*k,y-23*k);g.lineTo(x+(tx+6)*k,y-17*k);g.fill();}
     g.fillStyle='#c4bba2';g.fillRect(x-5*k,y-20*k,10*k,14*k);g.fillStyle='#7a2a1a';g.beginPath();g.moveTo(x-7*k,y-20*k);g.lineTo(x,y-29*k);g.lineTo(x+7*k,y-20*k);g.fill();
     g.fillStyle='#3a2810';g.fillRect(x-3*k,y-4*k,6*k,6*k);for(let i=0;i<7;i++)g.fillRect(x-16*k+i*5*k,y-12*k,2.5*k,2*k);}
+  if(t.farms){
+    g.fillStyle='#9c9a42';g.fillRect(x-19*k,y-9*k,7*k,6*k);
+    g.strokeStyle='#62592c';g.lineWidth=.65*k;
+    for(let j=0;j<t.farms+1;j++)line(g,x-19*k,y-(9-j*1.5)*k,x-12*k,y-(9-j*1.5)*k);
+  }
+  if(t.market||t.barracks){
+    g.fillStyle=t.market?'#ba7d4a':'#b3a081';g.fillRect(x+11*k,y-9*k,7*k,6*k);
+    g.fillStyle='#483222';g.beginPath();g.moveTo(x+9*k,y-9*k);g.lineTo(x+14.5*k,y-13*k);g.lineTo(x+20*k,y-9*k);g.fill();
+  }
+  if(label&&t.raidedUntil>G.day){
+    const time=performance.now()/1000;
+    for(let i=0;i<6;i++){const f=(time*.45+i/6)%1;g.fillStyle=`rgba(57,50,43,${(1-f)*.62})`;g.beginPath();
+      g.arc(x+(f*13+Math.sin(i)*4)*k,y-(8+f*33)*k,(2+f*7)*k,0,Math.PI*2);g.fill();}
+  }
   if(label){const own=G&&t.own!==undefined?ownerOf(t):null;
     g.font=`600 ${Math.round(Math.max(10,11*k))}px ${FONT()}`;g.textAlign='center';g.textBaseline='top';
     const tw=g.measureText(t.n).width;
@@ -2369,7 +2404,12 @@ function mapStep(dt){
     const aS=strength(a.troops,0),d=Math.hypot(G.x-a.x,G.y-a.y),war=G.rel[a.fac]==='war';a.cool-=dt;
     if(a.mission!=null){const t=G.towns[a.mission];
       if(ownerOf(t)!=='p'||!war){a.mission=null;}
-      else{a.tx=t.x;a.ty=t.y+6;if(Math.hypot(t.x-a.x,t.y+6-a.y)<14){townAttacked(a,t);return;}}}
+      else{
+        a.tx=t.x;a.ty=t.y+6;
+        const approach=Math.hypot(a.tx-a.x,a.ty-a.y);
+        if(approach<14){townAttacked(a,t);return;}
+        if(approach<110&&!a.warned){a.warned=true;townAttacked(a,t,true);save();return;}
+      }}
     if(a.mission==null){if(war&&a.cool<=0&&d<160&&aS>=pS*.9){a.tx=G.x;a.ty=G.y;a.chase=(a.chase||0)+dt;if(a.chase>7){a.cool=14;a.chase=0;}}else wander(a,90);}
     moveParty(a,dt);
     if(Math.hypot(G.x-a.x,G.y-a.y)<15){const mine=G.tgt&&G.tgt.k==='a'&&G.tgt.id===a.id;
@@ -2421,7 +2461,8 @@ function partiesStep(dt){
 }
 function dailyTick(){
   G.day++;const msgs=[];
-  const tax=myTowns().reduce((a,t)=>a+TAX[t.s],0);if(tax)G.gold+=tax;
+  const holdings=myTowns(),tax=holdings.reduce((a,t)=>a+townTax(t),0);if(tax)G.gold+=tax;
+  G.food+=holdings.reduce((n,t)=>n+(t.farms||0)*12,0);
   const wage=G.army.concat(...G.parties.map(p=>p.troops)).reduce((a,e)=>a+e.n*TROOPS[e.id].wage,0);
   if(wage){G.gold-=wage;if(G.gold<0){const gone=Math.max(1,Math.ceil(armyCount()*.12));for(let i=0;i<gone;i++)removeRandomTroop();G.gold=0;msgs.push(`เงินไม่พอจ่ายค่าจ้าง ทหาร ${gone} คนหนีทัพ`);}}
   const eat=eatPerDay();if(G.food>=eat)G.food-=eat;else{G.food=0;const gone=Math.max(1,Math.ceil(armyCount()*.06));if(armyCount()){for(let i=0;i<gone;i++)removeRandomTroop();msgs.push(`เสบียงหมด! ทหาร ${gone} คนหิวโหยหนีทัพ ไปซื้อเสบียงที่หมู่บ้านด่วน`);}}
@@ -2435,8 +2476,12 @@ function dailyTick(){
       else if(Math.random()<.04+p.d*.004){p.n--;fled++;}}}
   G.pris=G.pris.filter(p=>p.n>0);
   if(joined)msgs.push(`เชลย ${joined} คนยอมเข้าร่วมทัพเรา`);if(fled)msgs.push(`เชลย ${fled} คนแอบหนีไป`);
-  for(const t of G.towns)if(G.day-t.rs>=6)restock(t);
-  for(const t of G.towns)if(t.s!=='v'&&t.own!=='p'&&Math.random()<.5){const cap=t.s==='k'?42:(t.own==='ind'?14:20);if(total(t.gar)<cap)addTo(t.gar,pickR(t.s==='k'?['rsp','rsw','hun','spr','swd','arc']:['vil','rsp','rsw','hun']),1);}
+  for(const t of G.towns){
+    if(t.raidedUntil&&G.day<t.raidedUntil)continue;
+    if(t.raidedUntil){delete t.raidedUntil;t.gar=makeGarrison(t);restock(t);}
+    else if(G.day-t.rs>=6)restock(t);
+  }
+  for(const t of G.towns)if(t.s!=='v'&&t.own!=='p'&&Math.random()<.5){const cap=TOWN_SIZE[t.s][0],missing=cap-total(t.gar);if(missing>0)addTo(t.gar,SPECIAL[t.own]||'rsp',Math.min(6,missing));}
   for(const f of FACTIONS){
     if(G.rel[f.id]==='gone'||!G.towns.some(t=>t.s!=='v'&&t.own===f.id))continue;
     const mine=G.armies.filter(a=>a.fac===f.id);
@@ -2445,7 +2490,7 @@ function dailyTick(){
     const targets=myTowns().filter(t=>t.s!=='v');
     if(targets.length&&Math.random()<.22){const idle=mine.filter(a=>a.mission==null);if(idle.length){const a=pickR(idle);
       const t=targets.slice().sort((p,q)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(q.x-a.x,q.y-a.y))[0];
-      a.mission=G.towns.indexOf(t);msgs.push(`<b>${a.name}</b> ยกทัพ ${total(a.troops)} นาย มุ่งหน้าตี<b>${t.n}</b>!`);}}
+      a.mission=G.towns.indexOf(t);a.warned=false;msgs.push(`<b>${a.name}</b> ยกทัพ ${total(a.troops)} นาย มุ่งหน้าตี<b>${t.n}</b>!`);}}
   }
   const want=Math.min(30,14+Math.floor(G.day/4));while(G.bandits.length<want){const before=G.bandits.length;spawnBandit();if(G.bandits.length===before)break;}
   // always keep some prey within a day or two's ride of the general
@@ -2466,15 +2511,14 @@ function shrink(list,f){for(const e of list){e.n=Math.max(0,Math.round(e.n*(1-f)
 function autoBattle(A,D,bonus){const sa=strength(A,0),sd=strength(D,0)*bonus;const aWins=Math.random()<sa/(sa+sd||1);
   const ws=aWins?sa:sd,ls=aWins?sd:sa;const lw=Math.min(.75,ls/(ws+1)*.55),ll=rnd(.6,.95);
   shrink(A,aWins?lw:ll);shrink(D,aWins?ll:lw);return aWins;}
-function townAttacked(a,t){
-  if(Math.hypot(G.x-t.x,G.y-t.y)<50){G.tx=null;G.tgt=null;waiting=0;
-    openSheet(`<h2>${a.name}ล้อม${t.n}!</h2><p style="margin:0">ทัพข้าศึก ${total(a.troops)} นาย กำลังตีกำแพงเมืองของเรา ทหารเฝ้าเมืองมี ${total(t.gar)} นาย</p>
-      <button class="btn gold big" id="dDef" type="button">เข้าเมืองช่วยรักษากำแพง!</button>
-      <button class="btn" id="dLeave" type="button">ปล่อยให้ทหารเฝ้าเมืองสู้เอง</button>`);
-    $('#dDef').onclick=()=>{closeSheet();beginDefense(a,t);};
-    $('#dLeave').onclick=()=>{closeSheet();resolveAway(a,t);};
-    return;}
-  resolveAway(a,t);
+function townAttacked(a,t,approaching=false){
+  G.tx=null;G.tgt=null;G.path=null;waiting=0;
+  openSheet(`<h2>${approaching?'แจ้งเตือน · '+a.name+'กำลังมุ่งหน้าตี':a.name+'ล้อม'}${t.n}!</h2>
+    <p>ทัพข้าศึก ${total(a.troops)} นาย · ทหารเฝ้าเมือง ${total(t.gar)} นาย</p>
+    <button class="btn gold big" id="dDef" type="button">นำทัพเข้าสนามป้องกันเมือง</button>
+    <button class="btn" id="dLeave" type="button">${approaching?'รอดูสถานการณ์':'ปล่อยให้ทหารเฝ้าเมืองสู้เอง'}</button>`);
+  $('#dDef').onclick=()=>{closeSheet();[G.x,G.y]=toLand(t.x,t.y);beginDefense(a,t);};
+  $('#dLeave').onclick=()=>{closeSheet();if(!approaching)resolveAway(a,t);};
 }
 function resolveAway(a,t){
   const pg=G.parties.find(p=>p.order==='guard'&&G.towns[p.town]===t),og=pg&&offById(pg.oid);
@@ -2569,7 +2613,7 @@ function bindShop(t){
 }
 function openTown(t){
   const own=ownerOf(t),F=facOf(own),rel=relOf(own),fort=t.s!=='v';
-  const hostile=rel==='war';const disc=(rel==='own'||rel==='ally')?.8:1;
+  const hostile=rel==='war'||(t.raidedUntil||0)>G.day;const disc=(rel==='own'||rel==='ally')?.8:1;
   const rows=hostile?`<p class="muted" style="margin:0">ชาวเมืองไม่ยอมให้ศัตรูของ${F.short}จ้างคน</p>`:(Object.entries(t.stock).filter(([,n])=>n>0).map(([id,n])=>{const T=TROOPS[id],pr=Math.round(T.price*disc);
     const hireBlock=armyCount()>=limit()?'กองทัพเต็ม':G.gold<pr?'ทองไม่พอ':'';
     return `<div class="item"><canvas width="80" height="88" data-icon="${id}"></canvas><div class="t"><b>${T.n}</b><span class="stars">${stars(T.tier)}</span><small>${pr} ทอง/คน · เงินเดือน ${T.wage}/วัน · มี ${n} คน</small></div>
@@ -2581,14 +2625,16 @@ function openTown(t){
     fortHtml=`<div class="sec">กำลังป้องกันเมือง</div><div class="item"><div class="t"><b>ทหารเฝ้าเมือง ${total(t.gar)} นาย</b><small>${troopList(t.gar)}</small><small>ประเมิน: ${verdict} (กำแพงช่วยฝ่ายตั้งรับ)</small></div></div>
       ${rel==='ally'?'<small class="muted">เมืองพันธมิตร ตีไม่ได้</small>':`<button class="btn gold" id="tSiege" type="button">ตั้งทัพหน้าเมือง บุกตี!${rel==='peace'?` (ประกาศสงครามกับ${F.short})`:''}</button>`}`;}
   let mineHtml='';
-  if(own==='p'){mineHtml=`<div class="sec">เมืองของเรา · ภาษี +${TAX[t.s]} ทอง/วัน</div>`;
+  if(own==='p'){mineHtml=`<div class="sec">เมืองของเรา · ภาษี +${townTax(t)} ทอง/วัน</div>`;
     if(fort){const g=t.gar.map((e,i)=>`<div class="item"><div class="t"><b>${TROOPS[e.id].n} × ${e.n}</b><small>เฝ้าเมือง</small></div><button class="btn" data-take="${i}" type="button">รับคืน</button></div>`).join('')||'<p class="muted" style="margin:0">ยังไม่มีทหารเฝ้าเมือง ถ้าข้าศึกมาตี เมืองจะถูกยึดง่าย</p>';
       const a=G.army.filter(e=>e.n-e.w>0).map(e=>`<div class="item"><div class="t"><b>${TROOPS[e.id].n} × ${e.n-e.w}</b><small>ในกองทัพ</small></div><button class="btn" data-leave="${e.id}" data-q="1" type="button">ฝาก 1</button><button class="btn" data-leave="${e.id}" data-q="all" type="button">ฝากหมด</button></div>`).join('');
       mineHtml+=`<div class="list">${g}</div>${a?`<small class="muted">ฝากทหารไว้เฝ้าเมือง (ไม่ต้องจ่ายเงินเดือน)</small><div class="list">${a}</div>`:''}`;}}
   openSheet(`<div class="row town-heading"><canvas id="townPic" width="200" height="120" style="width:64px;height:auto;flex:none"></canvas><div class="grow" style="min-width:0"><h2>${t.n}</h2>
       <span class="muted" style="font-size:13px">${TOWN_KIND[t.s]} · ${chip(F.color)}${F.name}${rel!=='own'&&rel!=='ind'?` · ${REL_TXT[rel]}`:''}</span></div><button class="btn" id="tExitTop" type="button">กลับแผนที่</button></div>
     <div class="muted" style="font-size:13.5px">ทอง ${G.gold} · ทหาร ${armyCount()}/${limit()} นาย</div>
-    ${fortHtml}${mineHtml}
+    ${t.s==='v'&&own!=='p'&&rel!=='ally'?`<div class="item"><div class="t"><b>ชาวบ้านพร้อมป้องกัน ${total(t.gar)} คน</b><small>${t.raidedUntil>G.day?`กำลังฟื้นตัวถึงวันที่ ${t.raidedUntil}`:'ต้องชนะการรบจึงจะปล้นได้'}</small></div>
+      <button class="btn red" id="raidTown" type="button"${t.raidedUntil>G.day?' disabled':''}>บุกปล้น</button></div>`:''}
+    ${fortHtml}${mineHtml}${cityProjects(t)}
     <div class="sec">จ้างคนเข้ากองทัพ${disc<1&&!hostile?' (ลด 20%)':''}</div><div class="list">${rows}</div>
     ${townShop(t,hostile,own)}
     <div class="list">
@@ -2597,7 +2643,8 @@ function openTown(t){
     </div>
     <button class="btn gold" id="tLeave" type="button">ออกเดินทาง</button>`);
   const tp=$('#townPic').getContext('2d');tp.scale(2,2);drawTownAt(tp,t,50,44,1.5,false);
-  document.querySelectorAll('[data-icon]').forEach(c=>troopIcon(c,c.dataset.icon));bindShop(t);
+  document.querySelectorAll('[data-icon]').forEach(c=>troopIcon(c,c.dataset.icon));bindShop(t);bindCityProjects(t);
+  if($('#raidTown'))$('#raidTown').onclick=()=>{closeSheet();beginRaid(t);};
   document.querySelectorAll('[data-hire]').forEach(b=>b.onclick=()=>{const id=b.dataset.hire,T=TROOPS[id],pr=Math.round(T.price*disc);
     if(b.dataset.q==='gar'){const q=Math.min(t.stock[id],Math.floor(G.gold/pr));if(q<=0){toast('ทองไม่พอ');return;}G.gold-=q*pr;t.stock[id]-=q;addTo(t.gar,id,q);save();toast(`จ้าง${T.n} ${q} คนเฝ้าเมือง`);openTown(t);return;}
     if(armyCount()>=limit()){toast(`กองทัพเต็มแล้ว (${limit()} นาย)<br>แม่ทัพต้องเลื่อนขั้นถึงจะคุมคนได้มากขึ้น`,3000);return;}
@@ -2628,7 +2675,7 @@ function openArmy(){
       ${ready?`<small style="color:var(--gold)">พร้อมเลื่อนขั้น ${ready} คน เลือกสายที่ต้องการ</small><div class="ups">${ups}</div>`:''}
       ${T.tier>=3&&fit>0&&G.officers.length<maxOff()?`<div class="ups"><button class="btn" data-promote="${i}" type="button">แต่งตั้ง 1 คนเป็นขุนพล · 100 ทอง</button></div>`:''}</div></div>`;}).join('')||'<p class="muted" style="margin:0">ยังไม่มีทหารเลย ไปจ้างชาวบ้านที่หมู่บ้านก่อน</p>';
   const pr=G.pris.map((p,i)=>`<div class="item"><canvas width="80" height="88" data-picon="${p.id}"></canvas><div class="t"><b>${TROOPS[p.id].n} × ${p.n}</b><small>ถูกจับมา ${p.d||0} วัน · ขังไว้นานอาจยอมเข้าร่วม หรือแอบหนี</small></div><button class="btn" data-free="${i}" type="button">ปล่อย</button></div>`).join('');
-  const towns=myTowns();const tax=towns.reduce((a,t)=>a+TAX[t.s],0);
+  const towns=myTowns();const tax=towns.reduce((a,t)=>a+townTax(t),0);
   openSheet(`<div class="row"><canvas id="armyFlag" width="90" height="70" style="width:45px;height:35px;flex:none"></canvas><div class="grow"><h2>${playerName()}</h2><span class="muted" style="font-size:13px">แม่ทัพ Lv ${g.lv} · คุมทหารได้ ${limit()} นาย · ประสบการณ์ ${g.xp}/${need}</span>
     <div class="xpbar"><i style="width:${g.xp/need*100}%"></i></div></div></div>
     ${genPanel()}
@@ -2739,14 +2786,65 @@ $('#bMenu').onclick=()=>{openSheet(`<h2>เมนู</h2><div class="list">
   <div class="item"><div class="t"><b>ขุนพลและการแยกทัพ</b><small>จ้างนักรบพเนจรตามค่ายหรือเมือง หรือแต่งตั้งทหารฝีมือเป็นขุนพล · ในหน้ากองทัพกด “แยกทัพให้คุม” แล้วสั่งลาดตระเวนล่าโจร หรือสั่งบุกกองโจร ทัพศัตรู และเมือง · แตะธงสีเขียวบนแผนที่เพื่อสั่งการใหม่ · ขุนพลที่อยู่กับทัพหลวงจะขี่ม้าออกรบข้างแม่ทัพ</small></div></div>
   <div class="item"><div class="t"><b>เสบียงและการฝึก</b><small>ทัพต้องกินทุกวัน ซื้อเสบียงถูกที่หมู่บ้าน ขายแพงที่เมืองใหญ่ · โรงตีเหล็กในค่ายและเมืองขายเกราะ อาวุธทั้งกองทัพ · สำนักฝึกในเมืองต่าง ๆ ทำให้ทหารแต่ละสายเก่งขึ้นถาวร · ทัพที่สั่งตั้งรับ (ธงทอง) ทหารโล่จะยกโล่บังลูกธนู</small></div></div>
   <div class="item"><div class="t"><b>เลื่อนขั้นทหาร</b><small>ชาวบ้าน → ทหารเกณฑ์ (หอก/ดาบ/พราน) → ทหารฝีมือ (หอก/ม้า/ดาบ/โล่/ธนู) → ยอดทหาร</small></div></div>
+  <button class="btn" id="mFound" type="button">ก่อตั้งค่ายถาวร</button>
   <button class="btn" id="mSave" type="button">บันทึกเกม</button>
   <button class="btn" id="mNew" type="button">เริ่มเกมใหม่</button>
   </div><button class="btn gold" id="mClose" type="button">กลับไปเล่น</button>`);
-  $('#mDip').onclick=openDiplo;
+  $('#mDip').onclick=openDiplo;$('#mFound').onclick=openFoundTown;
   $('#mSave').onclick=()=>{toast(save()?'บันทึกแล้ว':'บันทึกเกมไม่ได้ กรุณาลองอีกครั้ง');};
   $('#mNew').onclick=()=>{openSheet(`<h2>เริ่มเกมใหม่?</h2><p class="muted" style="margin:0">ความคืบหน้าทั้งหมดจะหายไป</p><div class="row"><button class="btn grow" id="nNo" type="button">ไม่</button><button class="btn gold grow" id="nYes" type="button">เริ่มใหม่</button></div>`);
     $('#nNo').onclick=closeSheet;$('#nYes').onclick=()=>{try{localStorage.removeItem(SAVE);}catch(e){}closeSheet();G=null;showTitle();};};
   $('#mClose').onclick=closeSheet;};
+
+const FOUND_GOLD=250,FOUND_FOOD=50;
+function foundingBlock(){
+  if(!onLand(G.x,G.y)||G.towns.some(t=>Math.hypot(t.x-G.x,t.y-G.y)<55))return 'เลือกพื้นที่บนบก ห่างเมืองหรือหมู่บ้านเดิมอย่างน้อย 55 หน่วย';
+  if(G.gold<FOUND_GOLD||G.food<FOUND_FOOD)return 'ทองหรือเสบียงไม่พอ';
+  return '';
+}
+function openFoundTown(){
+  const block=foundingBlock();
+  openSheet(`<h2>ก่อตั้งค่ายถาวร</h2><p>ใช้ ${FOUND_GOLD} ทองและ ${FOUND_FOOD} เสบียง สร้างค่ายของเราที่ตำแหน่งแม่ทัพ</p>
+    <p class="muted">${block||'เริ่มจากค่ายไม้ แล้วสร้างตลาด ไร่นา และโรงทหารเพื่อเลื่อนเป็นเมืองป้อม'}</p>
+    <label for="settlementName">ชื่อค่าย</label><input id="settlementName" type="text" maxlength="24" placeholder="ค่ายใหม่">
+    <button class="btn gold" id="foundGo" type="button"${block?' disabled':''}>ลงหลักปักฐาน</button>
+    <button class="btn" id="foundCancel" type="button">กลับแผนที่</button>`);
+  $('#foundCancel').onclick=closeSheet;
+  $('#foundGo').onclick=()=>{
+    const n=$('#settlementName').value.trim()||'ค่ายใหม่';
+    if(!/^[ก-๙a-zA-Z0-9 -]{1,24}$/.test(n)||G.towns.some(t=>t.n===n)){toast('ใช้ชื่อไทย อังกฤษ หรือตัวเลข และเลือกชื่อที่ไม่ซ้ำ');return;}
+    const reason=foundingBlock();if(reason){toast(reason);return;}
+    const t={n,x:G.x,y:G.y,s:'c',own:'p',wall:0,gar:[{id:'vil',n:20,w:0}],stock:{},rs:G.day,founded:true};
+    G.gold-=FOUND_GOLD;G.food-=FOUND_FOOD;G.towns.push(t);restock(t);terrDirty=true;save();openTown(t);
+  };
+}
+const PROJECTS={market:{name:'ตลาด',cost:180,desc:'+30 ทองต่อวัน'},farms:{name:'ไร่นา',cost:140,desc:'+12 เสบียงต่อวัน'},barracks:{name:'โรงทหาร',cost:220,desc:'+70 ความจุทัพ'}};
+function cityProjects(t){
+  if(t.own!=='p'||t.s==='v')return '';
+  const projects=Object.entries(PROJECTS).map(([id,p])=>{
+    const lv=t[id]||0,cost=p.cost*(lv+1);
+    return `<div class="item"><div class="t"><b>${p.name} · ขั้น ${lv}/3</b><small>${p.desc} ต่อขั้น</small></div>
+      <button class="btn" type="button" data-project="${id}"${lv>=3||G.gold<cost?' disabled':''}>${lv>=3?'เต็มขั้น':`สร้าง · ${cost} ทอง`}</button></div>`;
+  }).join('');
+  const promote=t.founded&&t.s==='c'?'<button class="btn gold" id="promoteTown" type="button">ยกค่ายเป็นเมืองป้อม · 800 ทอง / 120 เสบียง</button>':'';
+  return `<div class="sec">ผังพัฒนาเมือง</div><div class="list">${projects}${promote}</div>`;
+}
+function bindCityProjects(t){
+  document.querySelectorAll('[data-project]').forEach(button=>button.onclick=()=>{
+    const id=button.dataset.project,lv=t[id]||0,cost=PROJECTS[id].cost*(lv+1);
+    if(lv>=3||G.gold<cost)return;
+    G.gold-=cost;t[id]=lv+1;save();openTown(t);
+  });
+  const promote=$('#promoteTown');if(!promote)return;
+  const ready=Object.keys(PROJECTS).every(id=>t[id]>0)&&G.gold>=800&&G.food>=120;
+  promote.disabled=!ready;
+  if(!ready)promote.insertAdjacentHTML('afterend','<small>ต้องมีตลาด ไร่นา และโรงทหารอย่างน้อยขั้น 1 พร้อมทรัพยากรครบ</small>');
+  promote.onclick=()=>{G.gold-=800;G.food-=120;t.s='k';t.wall=Math.max(1,t.wall);restock(t);terrDirty=true;save();openTown(t);};
+}
+function beginRaid(t){
+  const own=ownerOf(t),fac=own&&own!=='ind'?own:null;
+  beginBattle({kind:'raid',name:`ชาวบ้าน${t.n}`,troops:t.gar,town:t,fac,pal:palette(facOf(own).color)},{site:'village'});
+}
 
 function encounter(o,kind,chased){
   const isArmy=kind==='a',F=isArmy?facOf(o.fac):null,rel=isArmy?G.rel[o.fac]:'war';
@@ -2844,15 +2942,20 @@ $('#trialBtn').onclick=()=>{
   const fields=['plain','river','forest','hills','coast','siege'];
   openSheet('<h2>เลือกสนามทดสอบ</h2><p class="muted">จัดทัพแล้วกดเริ่มรบได้ทันที แคมเปญและเซฟของคุณจะถูกเก็บไว้</p>'+
     fields.map(id=>`<button class="btn" type="button" data-trial="${id}">${SITE_NAME[id]}</button>`).join('')+
+    '<button class="btn gold" type="button" data-trial="river" data-big="1">ริมแม่น้ำ · ทดสอบทัพละ 1,000 นาย</button>'+
     '<button class="btn" type="button" id="trialCancel">กลับ</button>');
   $('#trialCancel').onclick=closeSheet;
-  document.querySelectorAll('[data-trial]').forEach(b=>b.onclick=()=>startTrial(b.dataset.trial));
+  document.querySelectorAll('[data-trial]').forEach(b=>b.onclick=()=>startTrial(b.dataset.trial,b.dataset.big==='1'));
 };
-function startTrial(site){
+function startTrial(site,big){
   trial=true;
   newGame('สยาม',pickColor,pickEm);
-  for(const [id,n] of [['spr',8],['shd',8],['arc',6],['gun',5],['lcv',6],['can',2]])addTroop(id,n);
-  const troops=[['b2',10],['b3',8],['b5',9],['b4',6],['gun',5]].map(([id,n])=>({id,n,w:0}));
+  const ours=big?[['pike',320],['shd',230],['arc',200],['xbow',150],['jav',80],['lcv',19]]:
+    [['spr',8],['pike',4],['shd',8],['arc',6],['xbow',4],['jav',4],['gun',5],['lcv',6],['can',2]];
+  for(const [id,n] of ours)addTroop(id,n);
+  const enemies=big?[['b2',320],['b3',220],['pike',180],['jav',140],['xbow',100],['b4',40]]:
+    [['b2',12],['b3',10],['pike',9],['b4',6],['gun',5],['jav',7]];
+  const troops=enemies.map(([id,n])=>({id,n,w:0}));
   closeSheet();
   $('#bLeaveTrial').hidden=false;
   beginBattle({kind:'trial',name:'ทัพคู่ซ้อม',troops,pal:palette('#a13b2e',{name:'ทัพคู่ซ้อม'})},
@@ -2928,14 +3031,14 @@ function renderFigure(g,S,type,P){
   let farHand=null,nearHand=null;const sw01=sw>=0?(sw+.5)/6:-1;
   if(type==='spr'||type==='vil'||type==='shd'&&false){}
   let spear=null;
-  if(type==='spr'||type==='vil'){
-    const a=ready?aimL:-1.36,d=[Math.cos(a),Math.sin(a)];const th=sw01>=0?Math.sin(sw01*Math.PI)*3.6:0;
+  if(type==='spr'||type==='vil'||type==='pike'||type==='jav'){
+    const a=ready?aimL-(type==='jav'?.22:0):-1.36,d=[Math.cos(a),Math.sin(a)];const th=sw01>=0?Math.sin(sw01*Math.PI)*3.6:0;
     const rear=ready?[-.3+d[0]*th*.6,-2.6+d[1]*th*.6]:[1.5,-3.2];
     const front=ready?[rear[0]+d[0]*3.1,rear[1]+d[1]*3.1]:[rear[0]+d[0]*3,rear[1]+d[1]*3];
-    farHand=ready?front:null;nearHand=rear;spear={d,rear,L:type==='vil'?11:13};
+    farHand=ready?front:null;nearHand=rear;spear={d,rear,L:type==='pike'?19:type==='jav'?12:type==='vil'?11:13};
   }
   if(type==='arc'){const a=(P.pull>=0||ready)?aimL-.12:-1.2;farHand=(P.pull>=0||ready)?[shX+Math.cos(a)*5.1,shY+Math.sin(a)*5.1]:[shX+1.6,shY+3.6];}
-  if(type==='gun'){const aiming=P.aimOn||ready;const a=aiming?aimL*.8:-1.12;const rc=P.rc*.5;
+  if(type==='gun'||type==='xbow'){const aiming=P.aimOn||ready;const a=aiming?aimL*.8:-1.12;const rc=P.rc*.5;
     const butt=aiming?[shX-.3-rc,shY+.5]:[shX+.8,shY+4.4];farHand=[butt[0]+Math.cos(a)*4.4,butt[1]+Math.sin(a)*4.4];nearHand=[butt[0]+Math.cos(a)*1.3+.1,butt[1]+Math.sin(a)*1.3+.5];spear={gun:1,a,butt};}
   if(type==='inf')farHand=P.guard?[shX+1.5,shY-2.3]:[shX+2.3,shY+3.2];
   if(type==='shd')farHand=P.guard?[shX+2.5,shY-1.1]:[shX+2.6,shY+3];
@@ -2949,7 +3052,7 @@ function renderFigure(g,S,type,P){
     g.strokeStyle='#5a3418';g.lineWidth=.75;g.beginPath();g.moveTo(-1.2,-4.8);g.quadraticCurveTo(1.5,-2.6,.2,0);g.quadraticCurveTo(1.5,2.6,-1.2,4.8);g.stroke();
     g.strokeStyle='#c8a060';g.lineWidth=.35;g.beginPath();g.moveTo(-1.1,-4.5);g.quadraticCurveTo(1.25,-2.4,.15,-.4);g.stroke();
     g.strokeStyle='rgba(240,235,220,.9)';g.lineWidth=.22;g.beginPath();g.moveTo(-1.2,-4.8);g.lineTo(-1.2-pull,0);g.lineTo(-1.2,4.8);g.stroke();
-    if(P.pull>0){g.strokeStyle='#d8cfb4';g.lineWidth=.32;line(g,-1.2-pull,0,1.6,0);g.fillStyle='#ddd';g.beginPath();g.moveTo(2.6,0);g.lineTo(1.5,-.4);g.lineTo(1.5,.4);g.fill();
+    if(P.pull>0){g.strokeStyle='#1a1611';g.lineWidth=.32;line(g,-1.2-pull,0,1.6,0);g.fillStyle='#ddd';g.beginPath();g.moveTo(2.6,0);g.lineTo(1.5,-.4);g.lineTo(1.5,.4);g.fill();
       g.fillStyle='#b23a2a';g.fillRect(-1.2-pull,-.35,.9,.7);}
     g.restore();nearHand=P.pull>=0||ready?[farHand[0]+Math.cos(a)*(-1.2-pull)*1-0,farHand[1]+Math.sin(a)*(-1.2-pull)]:[shX-.2,shY+4.4];
     if(P.pull>=0||ready){const c=Math.cos(a),s_=Math.sin(a);nearHand=[farHand[0]+c*(-1.2-pull),farHand[1]+s_*(-1.2-pull)];}}
@@ -3033,9 +3136,15 @@ function renderFigure(g,S,type,P){
       g.fillStyle=metal(g,tx-d[1],ty+d[0],tx+d[1],ty-d[0],'#c8ccc8');g.beginPath();g.moveTo(tx+d[0]*2.8,ty+d[1]*2.8);g.lineTo(tx+d[0]*.6-d[1]*.55,ty+d[1]*.6+d[0]*.55);g.lineTo(tx,ty);g.lineTo(tx+d[0]*.6+d[1]*.55,ty+d[1]*.6-d[0]*.55);g.closePath();g.fill();g.strokeStyle=OL;g.lineWidth=.15;g.stroke();}}
   if(spear&&spear.gun){const{a,butt}=spear;g.save();g.translate(butt[0],butt[1]);g.rotate(a);
     poly(g,[-.2,-.35,3.6,-.35,3.6,.25,1.2,.55,-.2,.9],metal(g,0,-.4,0,.9,'#6b4520'));
+    if(type==='xbow'){
+      g.fillStyle='#493325';g.fillRect(2,-.35,6,.7);
+      g.strokeStyle='#b28a53';g.lineWidth=.65;g.beginPath();g.moveTo(5,-4);g.quadraticCurveTo(10,0,5,4);g.stroke();
+      g.strokeStyle='#4b4031';g.lineWidth=.25;line(g,5,-4,3.5,0);line(g,3.5,0,5,4);
+      g.strokeStyle='#151310';line(g,3.5,0,9.4,0);
+    }else{
     g.fillStyle=metal(g,0,-.3,0,.3,'#4a4a50');g.fillRect(3.2,-.32,8.6,.5);g.strokeStyle=OL;g.lineWidth=.12;g.strokeRect(3.2,-.32,8.6,.5);
     g.fillStyle='#c9a24a';for(const x of[4.6,7.4,10.6])g.fillRect(x,-.38,.35,.62);g.fillRect(2.4,-.55,.5,.4);
-    g.strokeStyle='#8a6a3a';g.lineWidth=.12;g.beginPath();g.moveTo(2.6,-.5);g.quadraticCurveTo(2,-1.6,2.9,-1.5);g.stroke();g.fillStyle='#ff7a20';g.beginPath();g.arc(2.9,-1.5,.18,0,7);g.fill();
+    g.strokeStyle='#8a6a3a';g.lineWidth=.12;g.beginPath();g.moveTo(2.6,-.5);g.quadraticCurveTo(2,-1.6,2.9,-1.5);g.stroke();g.fillStyle='#ff7a20';g.beginPath();g.arc(2.9,-1.5,.18,0,7);g.fill();}
     g.restore();}
   let sword=null;
   if(type==='inf'||type==='gen'){const a=sw01>=0?(-2.5+3.3*(1-Math.pow(1-sw01,2.5))):(ready?-.6:-1.15);
@@ -3191,7 +3300,7 @@ function renderCatapult(g,S,P){
 /* ---- cached sprite blit: every distinct pose is painted once at screen resolution ---- */
 const FIGC=new Map();
 const WOUNDS=[0,1,2,3].map(k=>{const r=rng(k*97+5);return[0,1,2,3].map(()=>[(r()-.45)*3,-12.6+r()*6,r()*3]);});
-const FBOX={d:[-12,-27,22,3],cav:[-12,-35,25,3],gen:[-12,-35,25,3],off:[-12,-35,25,3],can:[-15,-21,13,3],cat:[-15,-27,13,3]};
+const FBOX={pike:[-12,-33,29,3],d:[-12,-27,22,3],cav:[-12,-35,25,3],gen:[-12,-35,25,3],off:[-12,-35,25,3],can:[-15,-21,13,3],cat:[-15,-27,13,3]};
 const TAU=Math.PI*2;
 function drawMan(g,x,y,s,side,type,P){
   const S=P.pal||SIDE[side]||BANDIT,fx=Math.cos(P.face||0),fy=Math.sin(P.face||0);
@@ -3257,15 +3366,16 @@ function mkMap(id,seed){
   const R=rng(seed||ri(1,99999));
   const t=[...Array(ROWS)].map(()=>Array(COLS).fill('g'));
   const put=(n,v,c0,c1)=>{for(let i=0;i<n;i++){const r=Math.floor(R()*ROWS),c=c0+Math.floor(R()*(c1-c0+1));if(t[r][c]==='g')t[r][c]=v;}};
+  if(id==='village'){for(let r=1;r<ROWS;r+=3){t[r][1]='p';t[r][2]='p';}put(3,'f',3,9);}
   if(id==='plain'){put(2,'h',3,6);put(2,'f',2,7);}
   if(id==='hills'){put(6,'h',2,7);put(2,'f',3,6);}
   if(id==='forest'){put(9,'f',2,7);put(1,'h',3,6);}
-  if(id==='river'){const rc=4+(R()<.5?0:1);for(let r=0;r<ROWS;r++)t[r][rc]='w';const b1=Math.floor(R()*4),b2=5+Math.floor(R()*5);t[b1][rc]='b';t[b2][rc]='b';put(2,'f',2,7);put(1,'h',2,7);}
+  if(id==='river'){const rc=Math.floor(COLS/2)-(R()<.5?0:1);for(let r=0;r<ROWS;r++)t[r][rc]='w';const b1=1+Math.floor(R()*2),b2=6+Math.floor(R()*2);for(const r of [b1,b1+1,b2,b2+1])t[r][rc]='b';put(2,'f',2,7);put(1,'h',2,7);}
   if(id==='coast'){const top=R()<.5;for(let c=0;c<COLS;c++){t[top?0:ROWS-1][c]='w';t[top?1:ROWS-2][c]='s';}put(3,'s',2,7);put(2,'f',2,7);}
   return t;
 }
 function mkSiege(def,kind,wall){
-  const t=mkMap('plain');const wr=def==='red'?2:7;const inside=def==='red'?[0,1]:[8,9];
+  const t=mkMap('plain');const wr=def==='red'?DEPLOY-1:BLUE_EDGE;const inside=def==='red'?[0,1,2]:[COLS-3,COLS-2,COLS-1];
   for(const c of inside)for(let r=0;r<ROWS;r++)t[r][c]='p';
   for(let r=0;r<ROWS;r++)t[r][wr]='W';
   const gc=kind==='stone'?[2,7]:[4];const hp=(kind==='stone'?520:300)*(1+.5*(wall||0));
@@ -3275,12 +3385,12 @@ function mkSiege(def,kind,wall){
 const ter=(c,r)=>terrain[r][c];
 const inB=(c,r)=>c>=0&&r>=0&&c<COLS&&r<ROWS;
 function passFor(c,r,side,type){if(!inB(c,r))return false;const t=ter(c,r);
-  if(t==='w'||t==='D')return false;if(t==='W')return !!SG&&side===SG.def&&(type==='arc'||type==='gun');return true;}
+  if(t==='w'||t==='D')return false;if(t==='W')return !!SG&&side===SG.def&&(type==='arc'||type==='xbow'||type==='jav'||type==='gun');return true;}
 const isWater=(c,r)=>inB(c,r)&&(ter(c,r)==='w'||ter(c,r)==='b');
 const terAt=(x,y)=>{const c=Math.floor(x),r=Math.floor(y);return inB(c,r)?ter(c,r):'g';};
 function resizeBoard(){
   const w=$('#wrap').clientWidth-6,hAvail=window.innerHeight*(window.innerWidth<760?.54:.72);
-  cell=Math.max(24,Math.floor(Math.min(w/COLS,hAvail/ROWS,64)));dpr=window.devicePixelRatio||1;
+  cell=Math.max(12,Math.floor(Math.min(w/COLS,hAvail/ROWS,64)));dpr=window.devicePixelRatio||1;
   cv.width=cell*COLS*dpr;cv.height=cell*ROWS*dpr;cv.style.width=cell*COLS+'px';cv.style.height=cell*ROWS+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);buildBg();window.FX&&FX.attach(cv,$('#wrap'));
 }
@@ -3325,7 +3435,12 @@ function buildBg(){
     const trees=[];for(let i=0;i<9;i++)trees.push([x+cell*(.15+R()*.7),y+cell*(.15+R()*.75)]);trees.sort((a,b)=>a[1]-b[1]);
     for(const[tx,ty]of trees){const s=cell*(.11+R()*.06);g.fillStyle='rgba(0,0,0,.3)';g.beginPath();g.ellipse(tx+s*.3,ty+s*.9,s,s*.45,0,0,7);g.fill();
       g.fillStyle='#5a3d20';g.fillRect(tx-1,ty,2,s*.8);g.fillStyle='#22461f';g.beginPath();g.arc(tx,ty-s*.2,s,0,7);g.fill();g.fillStyle='#356b2c';g.beginPath();g.arc(tx-s*.3,ty-s*.5,s*.6,0,7);g.fill();}}
-  if(SG){const hc=SG.def==='red'?0:9;for(const r of[0,9]){const x=hc*cell,y=r*cell;g.fillStyle='rgba(0,0,0,.25)';g.fillRect(x+cell*.12,y+cell*.62,cell*.8,cell*.12);
+  if(siteId==='village'||SG){
+    const kind=siteId==='village'?'v':'k';
+    const cols=siteId==='village'?[1,2]:SG.def==='red'?[0,1,2]:[COLS-3,COLS-2,COLS-1];
+    for(const c of cols)for(let r=1+(c%2);r<ROWS;r+=3)drawTownAt(g,{s:kind,x:c,y:r},(c+.5)*cell,(r+.8)*cell,cell/(kind==='v'?35:65),false);
+  }
+  if(SG){const hc=SG.def==='red'?0:COLS-1;for(const r of[0,9]){const x=hc*cell,y=r*cell;g.fillStyle='rgba(0,0,0,.25)';g.fillRect(x+cell*.12,y+cell*.62,cell*.8,cell*.12);
       g.fillStyle='#8b6a42';g.fillRect(x+cell*.15,y+cell*.32,cell*.7,cell*.32);g.fillStyle=SG.kind==='stone'?'#8a3a24':'#a0844a';
       g.beginPath();g.moveTo(x+cell*.08,y+cell*.36);g.lineTo(x+cell*.5,y+cell*.05);g.lineTo(x+cell*.92,y+cell*.36);g.fill();g.fillStyle='#3a2810';g.fillRect(x+cell*.44,y+cell*.46,cell*.12,cell*.18);}}
   const light=g.createLinearGradient(0,0,W,H);
@@ -3355,7 +3470,16 @@ function slots(type){const a=[];
   if(ART[type])return[[-.05,-.22],[.1,.16]];
   if(type==='cav'){for(let r=0;r<2;r++)for(let c=0;c<3;c++)a.push([(r-.5)*.4,(c-1)*.25]);return a;}
   for(let r=0;r<3;r++)for(let c=0;c<4;c++)a.push([(r-1)*.25,(c-1.5)*.18]);return a;}
-function slotsFor(p){const sl=slots(p.type);
+function slotsFor(p){let sl=slots(p.type);
+  if(p.formation&&sl.length>1&&!ART[p.type]){
+    const sign=p.side==='blue'?-1:1;
+    sl=Array.from({length:p.n},(_,i)=>{
+      const u=p.n===1?0:i/(p.n-1)-.5;
+      if(p.formation==='line')return [0,u*.76];
+      if(p.formation==='column')return [u*.78,0];
+      return [sign*(.18-Math.abs(u)*.82),u*.72];
+    });
+  }
   const order=sl.map((s,i)=>i).sort((a,b)=>p.side==='blue'?(sl[a][0]-sl[b][0]):(sl[b][0]-sl[a][0]));
   return order.slice(0,p.n).map(i=>sl[i]);}
 function drawGrid(alpha){ctx.strokeStyle=`rgba(0,0,0,${alpha})`;ctx.lineWidth=1;
@@ -3365,11 +3489,11 @@ function drawGates(){for(const g of SG.gates){if(g.broken)continue;const x=g.c*c
   ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(x+cell*.12,y-2,cell*.76,5);ctx.fillStyle=g.hp/g.max>.5?'#d8b25a':'#e2553f';ctx.fillRect(x+cell*.12,y-2,cell*.76*Math.max(0,g.hp/g.max),5);}}
 function drawDeploy(){
   ctx.drawImage(bgCanvas,0,0,cell*COLS,cell*ROWS);drawGrid(.14);
-  ctx.fillStyle='rgba(80,140,230,.12)';ctx.fillRect(7*cell,0,cell*3,ROWS*cell);
-  ctx.strokeStyle=SIDE.blue.txt;ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.strokeRect(7*cell+1.5,1.5,cell*3-3,ROWS*cell-3);ctx.setLineDash([]);
+  ctx.fillStyle='rgba(80,140,230,.12)';ctx.fillRect(BLUE_EDGE*cell,0,cell*DEPLOY,ROWS*cell);
+  ctx.strokeStyle=SIDE.blue.txt;ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.strokeRect(BLUE_EDGE*cell+1.5,1.5,cell*DEPLOY-3,ROWS*cell-3);ctx.setLineDash([]);
   if(selPiece){
     ctx.fillStyle='rgba(255,225,151,.65)';
-    for(let r=0;r<ROWS;r++)for(let c=7;c<COLS;c++){
+    for(let r=0;r<ROWS;r++)for(let c=BLUE_EDGE;c<COLS;c++){
       if(pieces.some(p=>p.c===c&&p.r===r)||!passFor(c,r,'blue',selPiece.type))continue;
       ctx.beginPath();ctx.arc((c+.5)*cell,(r+.5)*cell,Math.max(2,cell*.064),0,Math.PI*2);ctx.fill();
     }
@@ -3389,16 +3513,17 @@ function drawDeploy(){
 const COL_ORDER=[4,5,3,6,2,7,1,8,0,9];
 function autoDeploy(side,groups){
   // 'rows' here are the three deployment columns (front to back); 'cols' are positions along the line
-  const rows=side==='blue'?[7,8,9]:[2,1,0];const used=new Set();const out=[];
-  const place=(g,lines,across)=>{for(const c of lines)for(const r of across){const k=c+','+r;if(used.has(k)||!passFor(c,r,side,g.type))continue;used.add(k);out.push({...g,side,c,r});return;}};
+  const rows=side==='blue'?[BLUE_EDGE,BLUE_EDGE+1,COLS-2,COLS-1]:[DEPLOY-1,DEPLOY-2,1,0];const used=new Set();const out=[];
+  const place=(g,lines,across)=>{for(const c of lines)for(const r of across){const k=c+','+r;if(used.has(k)||!passFor(c,r,side,g.type))continue;used.add(k);out.push({...g,group:g,side,c,r});return;}};
   const def=SG&&SG.def===side;let cols=COL_ORDER;
   if(def){const gr=SG.gates.map(g=>g.r);cols=[0,1,2,3,4,5,6,7,8,9].sort((a,b)=>Math.min(...gr.map(x=>Math.abs(x-a)))-Math.min(...gr.map(x=>Math.abs(x-b))));}
-  const ord={shd:0,spr:1,inf:2,vil:3};
+  const ord={shd:0,pike:1,spr:1,inf:2,vil:3};
   for(const g of groups.filter(g=>g.type in ord).sort((a,b)=>ord[a.type]-ord[b.type]))place(g,rows,cols);
-  for(const g of groups.filter(g=>g.type==='arc'||g.type==='gun'))place(g,def?rows:[rows[1],rows[2],rows[0]],COL_ORDER);
+  for(const g of groups.filter(g=>g.type==='arc'||g.type==='gun'||g.type==='xbow'||g.type==='jav'))place(g,def?rows:[rows[1],rows[2],rows[0]],COL_ORDER);
   for(const g of groups.filter(g=>ART[g.type]))place(g,def?[rows[1],rows[2]]:[rows[2],rows[1],rows[0]],[4,5,3,6,2,7]);
   for(const g of groups.filter(g=>g.type==='cav'))place(g,def?[rows[2],rows[1]]:rows,[0,9,1,8,2,7,3,6,4,5]);
-  for(const g of groups.filter(g=>g.type==='gen'||g.type==='off'))place(g,[rows[2],rows[1],rows[0]],COL_ORDER);
+  for(const g of groups.filter(g=>g.type==='gen'||g.type==='off'))place(g,[...rows].reverse(),COL_ORDER);
+  for(const g of groups)if(!out.some(p=>p.group===g))place(g,rows,COL_ORDER);
   return out;
 }
 function groupsFrom(list,side,withGen,gar){
@@ -3409,14 +3534,36 @@ function groupsFrom(list,side,withGen,gar){
   if(withGen)out.push({tid:'gen',type:'gen',n:1,src:null,ord:'atk'});
   return out;
 }
-function bluePieces(){let gs=groupsFrom(G.army,'blue',true,false).concat(G.officers.filter(offFree).map(o=>({tid:'off',oid:o.id,type:'off',n:1,src:null,ord:'atk'})));if(battleOpts.garrison)gs=gs.concat(groupsFrom(battleOpts.garrison,'blue',false,true));return autoDeploy('blue',gs.slice(0,24));}
+let battlePlan=null;
+function planWaves(groups,side){
+  const waves=[];
+  while(groups.length){
+    const batch=[];let count=0;
+    while(groups.length&&batch.length<12&&count+groups[0].n<=WAVE_SIZE){
+      const group=groups.shift();batch.push(group);count+=group.n;
+    }
+    const placed=autoDeploy(side,batch);
+    if(placed.length!==batch.length)throw Error('Not enough legal deployment cells');
+    waves.push(placed);
+  }
+  return waves;
+}
+function buildBattlePlan(foe){
+  const leaders=[{tid:'gen',type:'gen',n:1,src:null,ord:'atk'},...G.officers.filter(offFree).map(o=>({tid:'off',oid:o.id,type:'off',n:1,src:null,ord:'atk'}))];
+  const home=battleOpts.garrison?groupsFrom(battleOpts.garrison,'blue',false,true):[];
+  const army=groupsFrom(G.army,'blue',false,false);
+  const blue=planWaves([...leaders,...army,...home],'blue');
+  const red=planWaves(groupsFrom(foe.troops,'red',false,false),'red');
+  return {blue,red};
+}
+const reserveCount=(waves)=>waves.reduce((sum,w)=>sum+total(w),0);
 function beginBattle(foe,opts){
   battleFoe=foe;battleOpts=opts||{};SIDE.red=foe.pal;
   if(foe.fac&&G.rel[foe.fac]!=='war'){G.rel[foe.fac]='war';toast(`ประกาศสงครามกับ${facOf(foe.fac).name}แล้ว`,2600);}
   if(battleOpts.siege){const s=mkSiege(battleOpts.siege.def,battleOpts.siege.kind,battleOpts.siege.wall);terrain=s.t;SG={gates:s.gates,def:s.def,kind:s.kind,wr:s.wr};siteId=battleOpts.site;}
   else{SG=null;siteId=battleOpts.site||'plain';terrain=mkMap(siteId);}
   show('battleScreen');resizeBoard();
-  pieces=[...bluePieces(),...autoDeploy('red',groupsFrom(foe.troops,'red',false,false).slice(0,24))];
+  battlePlan=buildBattlePlan(foe);pieces=[...battlePlan.blue[0],...(battlePlan.red[0]||[])];
   selPiece=null;phase='deploy';$('#deployBar').hidden=false;$('#fightBar').hidden=true;
   $('#battlePhase').textContent='จัดทัพก่อนรบ';$('#battleMode').textContent=trial?'สนามทดสอบ':'แคมเปญ';
   renderBtop();renderDeployRoster();$('#battleScreen').scrollTop=0;
@@ -3438,6 +3585,9 @@ function selectUnit(p,message){
   for(const [id,ord] of [['bAttack','atk'],['bHold','hold']]){
     const b=$('#'+id);b.disabled=!p;b.setAttribute('aria-pressed',p?.ord===ord);
   }
+  document.querySelectorAll('[data-formation]').forEach(b=>{
+    b.disabled=!p||p.n<=1||!!ART[p.type];b.setAttribute('aria-pressed',p?.formation===b.dataset.formation);
+  });
   $('#deployStatus').textContent=message||(p
     ?`${deployName(p)} · ${p.ord==='hold'?'ตั้งรับ':'บุก'} · แตะช่องมีจุดเพื่อย้าย หรือแตะอีกกองเพื่อสลับ`
     :'แตะทหารฝั่งขวาหรือเลือกจากรายชื่อเพื่อสั่งการ');
@@ -3447,9 +3597,13 @@ function setDeployOrder(ord){
   if(!selPiece)return;
   selPiece.ord=ord;selectUnit(selPiece);
 }
+document.querySelectorAll('[data-formation]').forEach(b=>b.onclick=()=>{
+  if(!selPiece||b.disabled)return;
+  selPiece.formation=b.dataset.formation;selectUnit(selPiece,`${deployName(selPiece)} · ${b.textContent.trim()}`);
+});
 $('#bAttack').onclick=()=>setDeployOrder('atk');
 $('#bHold').onclick=()=>setDeployOrder('hold');
-$('#bAuto').onclick=()=>{pieces=[...bluePieces(),...pieces.filter(p=>p.side==='red')];renderDeployRoster();selectUnit(null,'จัดทัพใหม่แล้ว · แตะกองทหารเพื่อแก้ตำแหน่ง');};
+$('#bAuto').onclick=()=>{pieces=[...autoDeploy('blue',battlePlan.blue[0].map(p=>p.group)),...pieces.filter(p=>p.side==='red')];renderDeployRoster();selectUnit(null,'จัดทัพใหม่แล้ว · แตะกองทหารเพื่อแก้ตำแหน่ง');};
 let boardTap=null;
 cv.addEventListener('pointerdown',e=>{
   if(phase==='deploy'&&e.isPrimary&&e.button===0)boardTap={id:e.pointerId,x:e.clientX,y:e.clientY};
@@ -3470,7 +3624,7 @@ cv.addEventListener('pointerup',e=>{
     selectUnit(null,'สลับตำแหน่งแล้ว · เลือกกองถัดไปได้เลย');return;
   }
   if(!selPiece){selectUnit(null,at?'นี่คือกองทัพฝ่ายตรงข้าม · เลือกทหารฝั่งขวา':'เลือกกองทหารก่อน แล้วแตะช่องที่จะย้ายไป');return;}
-  if(c<7){selectUnit(selPiece,'ย้ายได้เฉพาะ 3 คอลัมน์ในเขตจัดทัพฝั่งขวา');return;}
+  if(c<BLUE_EDGE){selectUnit(selPiece,'ย้ายได้เฉพาะเขตจัดทัพฝั่งขวา');return;}
   if(at||!passFor(c,r,'blue',selPiece.type)){
     selectUnit(selPiece,ter(c,r)==='W'?'บนกำแพงใช้ได้เฉพาะทหารธนูและทหารปืน':'ช่องนี้วางทหารไม่ได้ · เลือกช่องที่มีจุด');return;
   }
@@ -3480,9 +3634,12 @@ $('#bFight').onclick=()=>{initAudio();startBattle();};
 function renderBtop(){
   const tb=$('#btop'),R=SIDE.red;
   if(phase==='deploy'){const mine=pieces.filter(p=>p.side==='blue').reduce((a,p)=>a+p.n,0),foe=pieces.filter(p=>p.side==='red').reduce((a,p)=>a+p.n,0);
-    tb.innerHTML=`<div class="rowx"><span class="who" style="color:${SIDE.blue.txt}">ทัพเรา ${mine}</span><span class="muted" style="font-size:13px">${SITE_NAME[siteId]}</span><span class="who" style="color:${R.txt}">${battleFoe.name} ${foe}</span></div>`;return;}
-  if(!B)return;const b=aliveCount('blue'),r=aliveCount('red'),tot=Math.max(1,b+r),sec=Math.floor(B.time);
+    const rb=reserveCount(battlePlan.blue.slice(1)),rr=reserveCount(battlePlan.red.slice(1));
+    tb.innerHTML=`<div class="rowx"><span class="who" style="color:${SIDE.blue.txt}">ทัพเรา ${mine+rb}</span><span class="muted">${SITE_NAME[siteId]}</span><span class="who" style="color:${R.txt}">${battleFoe.name} ${foe+rr}</span></div>
+      ${rb||rr?`<small class="muted">ลงสนามก่อน ${mine} ต่อ ${foe} · กำลังสำรอง ${rb} ต่อ ${rr}</small>`:''}`;return;}
+  if(!B)return;const b=aliveCount('blue'),r=aliveCount('red'),rb=reserveCount(B.reserve.blue),rr=reserveCount(B.reserve.red),tot=Math.max(1,b+r),sec=Math.floor(B.time);
   tb.innerHTML=`<div class="rowx"><span class="who" style="color:${SIDE.blue.txt}">ทัพเรา <span class="num">${b}</span></span><span class="num muted">${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}</span><span class="who" style="color:${R.txt}"><span class="num">${r}</span> ข้าศึก</span></div>
+    ${rb||rr?`<small class="muted">กำลังสำรอง ${rb} ต่อ ${rr}</small>`:''}
     <div class="meter"><i style="width:${b/tot*100}%;background:${SIDE.blue.tunic}"></i><i style="width:${r/tot*100}%;background:${R.light}"></i></div>`;
 }
 
@@ -3567,15 +3724,25 @@ function waypoint(m,tx,ty,dt){
   m.pathT-=dt;
   if(m.pathT<=0){m.pathT=.5+Math.random()*.3;
     const cl=(v,a)=>Math.max(0,Math.min(a-1,Math.floor(v)));const p=gridPath(cl(m.x,COLS),cl(m.y,ROWS),cl(tx,COLS),cl(ty,ROWS),m);m.wp=null;m.nopath=!p;
-    if(p){for(let k=p.length-1;k>=1;k--){const cx=p[k]%COLS+.5,cy=((p[k]/COLS)|0)+.5;if(lineClear(m.x,m.y,cx,cy,m)){m.wp=[cx,cy];break;}}
+    if(p){const next=p[1];if(next!=null&&ter(next%COLS,(next/COLS)|0)==='b'){m.wp=[next%COLS+.5,((next/COLS)|0)+.5];return m.wp;}for(let k=p.length-1;k>=1;k--){const cx=p[k]%COLS+.5,cy=((p[k]/COLS)|0)+.5;if(lineClear(m.x,m.y,cx,cy,m)){m.wp=[cx,cy];break;}}
       if(!m.wp&&p.length>1)m.wp=[p[1]%COLS+.5,((p[1]/COLS)|0)+.5];}}
   if(m.nopath)return null;
   return m.wp||[tx,ty];}
 function startBattle(){
   sfx('horn');newDecal();phase='battle';
   B={time:0,men:[],regs:[],arrows:[],balls:[],rolls:[],parts:[],pools:[],fx:[],log:[],over:false,shake:0,topT:0,stats:{blue:{kills:0,fled:0},red:{kills:0,fled:0}},chargeT:{},genDown:false};
-  pieces.forEach((p,ri)=>{
-    const reg={id:ri,side:p.side,type:p.type,tid:p.tid,oid:p.oid,src:p.src,gar:p.gar,eng:p.ord!=='hold',rout:false,men:[],routChk:1,chk:0};B.regs.push(reg);const R=rng(p.c*31+p.r*7+1);
+  B.reserve={blue:battlePlan.blue.slice(1),red:battlePlan.red.slice(1)};B.waveAt=0;B.waves={blue:1,red:battlePlan.red.length?1:0};
+  addBattleGroups(pieces);
+  B.startN={blue:B.men.filter(m=>m.side==='blue').length,red:B.men.filter(m=>m.side==='red').length};
+  $('#deployBar').hidden=true;$('#fightBar').hidden=false;$('#log').innerHTML='';
+  $('#battlePhase').textContent='กำลังรบ';$('#bSkip').disabled=false;$('#bSkip').textContent='ข้ามไปดูผล';$('#battleScreen').scrollTop=0;
+  log(SG?(SG.def==='red'?`ตั้งทัพหน้า${battleFoe.name} พังประตูเข้าไป!`:`${battleFoe.name}บุกมาที่กำแพง รักษาประตูไว้!`):`${SIDE.blue.name} ปะทะ ${battleFoe.name}!`);
+  banner(SG&&SG.def==='red'?'ตีเมือง!':'เริ่มรบ!');renderBtop();
+}
+function addBattleGroups(groups){
+  for(const p of groups){
+    const ri=B.regs.length;
+    const reg={id:ri,side:p.side,type:p.type,tid:p.tid,oid:p.oid,src:p.src,gar:p.gar,eng:p.ord!=='hold',rout:false,men:[],routChk:1,chk:0,enteredAt:B.time};B.regs.push(reg);const R=rng(p.c*31+p.r*7+1);
     const gs=G.gen.st,isG=p.tid==='gen',isO=p.tid==='off',mine=p.side==='blue'&&!isG&&!isO,oo=isO&&offById(p.oid);
     const T=isO?{hp:(1+oo.lv*.06)*(1+.15*oo.st.end),atk:offMul(oo)*(1+.08*oo.st.str)}:isG?{hp:(1+G.gen.lv*.07)*(1+.15*gs.end)*(1+.15*G.gear.arm),atk:(1+G.gen.lv*.05)*(1+.12*gs.str)*(1+.12*G.gear.wpn)}:TROOPS[p.tid];
     const dr=mine?(G.drill[drillKey(p.type)]||0):0,hpM=1+.06*dr,atkX=(1+.06*dr)*(mine?1+.1*G.eq.wpn:1);
@@ -3586,12 +3753,7 @@ function startBattle(){
         tgt:null,rt:Math.random()*.4,cd:Math.random()*.8,swing:-1,pend:null,aim:-1,wp:null,pathT:0,charge:0,run:0,
         alive:true,dying:-1,flash:0,fight:false,moving:false,react:Math.random()*.6};
       m.max=m.hp;B.men.push(m);reg.men.push(m);});
-  });
-  B.startN={blue:B.men.filter(m=>m.side==='blue').length,red:B.men.filter(m=>m.side==='red').length};
-  $('#deployBar').hidden=true;$('#fightBar').hidden=false;$('#log').innerHTML='';
-  $('#battlePhase').textContent='กำลังรบ';$('#bSkip').disabled=false;$('#battleScreen').scrollTop=0;
-  log(SG?(SG.def==='red'?`ตั้งทัพหน้า${battleFoe.name} พังประตูเข้าไป!`:`${battleFoe.name}บุกมาที่กำแพง รักษาประตูไว้!`):`${SIDE.blue.name} ปะทะ ${battleFoe.name}!`);
-  banner(SG&&SG.def==='red'?'ตีเมือง!':'เริ่มรบ!');renderBtop();
+  }
 }
 function aliveCount(s){return B?B.men.filter(m=>m.alive&&m.side===s).length:0;}
 function log(m){B.log.push(m);if(B.log.length>3)B.log.shift();$('#log').innerHTML=B.log.map(x=>`<div>${x}</div>`).join('');}
@@ -3601,7 +3763,7 @@ function fxText(x,y,s){if(B)B.fx.push({x,y,s,t0:performance.now()});}
 function terrMul(m){const t=terAt(m.x,m.y);if(t==='f')return MOUNT[m.type]?.45:.65;if(t==='h')return .85;if(t==='b'||t==='s'||t==='r')return .9;return 1;}
 function blocked(x,y,m){const c=Math.floor(x),r=Math.floor(y);if(!inB(c,r))return !B.regs[m.reg].rout;return !passFor(c,r,m.side,m.type);}
 function pickTarget(m,crowd){let best=null,bs=1e9;const melee=!RANGED[m.type];
-  for(const e of B.men){if(!e.alive||e.side===m.side)continue;let s=dist(m,e);if((VS[m.type][e.type]||1)>1)s-=.9;if(e===m.tgt)s-=.25;
+  for(const e of B.active){if(!e.alive||e.side===m.side)continue;let s=dist(m,e);if((VS[m.type][e.type]||1)>1)s-=.9;if(e===m.tgt)s-=.25;
     if(melee)s+=(crowd.get(e.id)||0)*.16;if(B.regs[e.reg].rout)s+=MOUNT[m.type]?1:3;if(melee&&SG&&terAt(e.x,e.y)==='W')s+=6;if(s<bs){bs=s;best=e;}}return best;}
 function steerTo(m,wx,wy,dt,mul){const dx=wx-m.x,dy=wy-m.y,L=Math.hypot(dx,dy)||1;
   const spd=MS[m.type].spd*(mul||1)*terrMul(m)*(m.spdM||1)*(.6+.4*(m.sta==null?1:m.sta));const k=Math.min(1,dt*(MOUNT[m.type]?1.8:5));m.vx+=(dx/L*spd-m.vx)*k;m.vy+=(dy/L*spd-m.vy)*k;}
@@ -3652,7 +3814,7 @@ function think(m,dt,fast,crowd){
   if(RANGED[m.type]&&(d>.55||onWall||ART[m.type])){const rg=st.range+(terAt(m.x,m.y)==='h'||onWall?1:0);
     if(d<=rg){brake(m,dt);faceTo(m,t,dt);m.fight=true;if(m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}
     if(!g.eng||onWall||ART[m.type]){brake(m,dt);return;}
-    if(!steer(m,t.x,t.y,dt,.5))steerTo(m,t.x,t.y,dt,.5);return;}
+    if(!steer(m,t.x,t.y,dt,.5))brake(m,dt);return;}
   if(d<=reachOf(m,t)){m.fight=true;brake(m,dt);faceTo(m,t,dt);
     if(m.cd<=0&&m.swing<0){m.swing=0;m.cd=st.cd*(.85+Math.random()*.3);m.pend={t:.17,d:t,charge:MOUNT[m.type]&&m.charge>.45};}return;}
   if(!g.eng){brake(m,dt);return;}
@@ -3715,8 +3877,8 @@ function stepRolls(dt,fast){B.rolls=B.rolls.filter(r=>{const st=Math.min(r.left,
   for(const e of B.men){if(!e.alive||e.side===r.side||r.hit.has(e.id))continue;if(Math.hypot(e.x-r.x,e.y-r.y)<.15){r.hit.add(e.id);
     hurt(e,MS.can.shot*.8*r.src.atkM*(.5+r.left/1.6*.5)*(ART[e.type]?.5:1),r.src,{x:r.ux,y:r.uy},fast,.3);r.left-=.15;}}
   return r.left>0;});}
-function fireArrow(m,fast){const t=m.tgt;if(!t||!t.alive)return;const d=dist(m,t),ft=.45+d*.13,sc=.08+d*.04;
-  B.arrows.push({x0:m.x+Math.cos(m.face)*.08,y0:m.y,x1:t.x+t.vx*ft*.7+(Math.random()-.5)*sc*2,y1:t.y+t.vy*ft*.7+(Math.random()-.5)*sc*1.6,t:0,dur:ft,h:.25+d*.16,side:m.side,src:m});
+function fireArrow(m,fast){const t=m.tgt;if(!t||!t.alive)return;const d=dist(m,t),ft=m.type==='xbow'?.26+d*.07:.45+d*.13,sc=.08+d*.04;
+  B.arrows.push({x0:m.x+Math.cos(m.face)*.08,y0:m.y,x1:t.x+t.vx*ft*.7+(Math.random()-.5)*sc*2,y1:t.y+t.vy*ft*.7+(Math.random()-.5)*sc*1.6,t:0,dur:ft,h:m.type==='xbow'?.12+d*.065:.25+d*.16,side:m.side,src:m});
   if(!fast)sfx('arrow');}
 function strike(a,d,charge,fast){
   const st=MS[a.type];let mult=(VS[a.type][d.type]||1)*(.8+Math.random()*.4)*a.atkM;
@@ -3724,11 +3886,11 @@ function strike(a,d,charge,fast){
   if(Math.random()<.12){mult*=2;}
   const ux=a.x-d.x,uy=a.y-d.y,L=Math.hypot(ux,uy)||1;const dot=(Math.cos(d.face)*ux+Math.sin(d.face)*uy)/L;
   if(dot<-.35)mult*=1.6;else if(dot<.3)mult*=1.2;
-  if(charge){mult*=d.type==='shd'?1.3:d.type==='spr'?1.05:2.3;a.charge=0;
+  if(charge){mult*=d.type==='shd'?1.3:(d.type==='spr'||d.type==='pike')?1.05:2.3;a.charge=0;
     const k=d.type==='shd'?.05:.2;const nx=d.x-ux/L*k,ny=d.y-uy/L*k;if(!blocked(nx,ny,d)){d.x=nx;d.y=ny;}d.react=.35;
     if(!fast){B.shake=Math.max(B.shake,performance.now()+220);sfx('charge',d.x);window.FX&&FX.charge(d.x*cell,d.y*cell);
       if(!B.chargeT[a.reg]||B.time-B.chargeT[a.reg]>5){B.chargeT[a.reg]=B.time;log(`${regName(B.regs[a.reg])} ชาร์จเข้าชน!`);fxText(a.x,a.y-.5,'ชาร์จ!');}}
-    if(d.type==='spr')hurt(a,MS.spr.atk*1.2*d.atkM,d,{x:ux/L,y:uy/L},fast);}
+    if(d.type==='spr'||d.type==='pike')hurt(a,MS[d.type].atk*1.2*d.atkM,d,{x:ux/L,y:uy/L},fast);}
   if(d.type==='shd')mult*=.75;const tt=terAt(d.x,d.y);if(tt==='h')mult*=.8;if(tt==='W')mult*=.55;
   // steel on steel only when the blow lands on armour; otherwise it bites flesh
   const glance=!charge&&Math.random()<(d.arm||0)*.6;if(glance)mult*=.28;
@@ -3755,11 +3917,11 @@ function collide(live){const bins=new Map(),bs=.4;
         const mx=m.x-nx*pm,my=m.y-ny*pm*.7;if(!blocked(mx,my,m)){m.x=mx;m.y=my;}
         const qx=o.x+nx*po,qy=o.y+ny*po*.7;if(!blocked(qx,qy,o)){o.x=qx;o.y=qy;}}}}}
 function step(dt,fast){
-  B.time+=dt;const live=B.men.filter(m=>m.alive);
+  B.time+=dt;const live=B.active=B.men.filter(m=>m.alive);
   const crowd=new Map();for(const m of live)if(m.tgt&&!RANGED[m.type])crowd.set(m.tgt.id,(crowd.get(m.tgt.id)||0)+1);
   for(const g of B.regs){const al=g.men.filter(m=>m.alive);if(!al.length)continue;g.chk-=dt;
     if(!g.eng&&g.chk<=0){g.chk=.25;const cx=al.reduce((a,m)=>a+m.x,0)/al.length,cy=al.reduce((a,m)=>a+m.y,0)/al.length;
-      if(B.time>16||live.some(e=>e.side!==g.side&&Math.abs(e.x-cx)<3.2&&Math.abs(e.y-cy)<3.2))g.eng=true;}
+      if(B.time-g.enteredAt>16||live.some(e=>e.side!==g.side&&Math.abs(e.x-cx)<3.2&&Math.abs(e.y-cy)<3.2))g.eng=true;}
     g.routChk-=dt;
     if(g.routChk<=0&&!B.over&&g.type!=='gen'&&g.type!=='off'){g.routChk=1;const f=al.length/g.men.length;
       const cx=al.reduce((a,m)=>a+m.x,0)/al.length,cy=al.reduce((a,m)=>a+m.y,0)/al.length;
@@ -3790,7 +3952,7 @@ function step(dt,fast){
         if(Math.random()<.5)stuckArrow((hit.x+(Math.random()-.5)*.35)*cell,(hit.y+.05+Math.random()*.15)*cell);return false;}
       const tt=terAt(hit.x,hit.y);const mult=(.8+Math.random()*.4)*a.src.atkM*(hit.type==='shd'?.5:1)*(tt==='f'?.5:1)*(tt==='h'?.8:1)*(tt==='W'?.55:1)*(ART[hit.type]?.3:1);
       const glance=Math.random()<(hit.arm||0)*.55;
-      let ad=16*mult*(glance?.2:1);if(!glance&&Math.random()<(hit.type==='shd'?.06:MOUNT[hit.type]||ART[hit.type]?.08:.24))ad=hit.hp+1;
+      let ad=(a.src.type==='xbow'?24:a.src.type==='jav'?21:16)*mult*(glance?.2:1);if(!glance&&Math.random()<(hit.type==='shd'?.06:MOUNT[hit.type]||ART[hit.type]?.08:.24))ad=hit.hp+1;
       if(!glance)hit.arrows++;else if(!fast){sparks(hit.x*cell,(hit.y-.3)*cell);stuckArrow((hit.x+(Math.random()-.5)*.4)*cell,(hit.y+.1)*cell);}
       hurt(hit,ad,a.src,{x:Math.sign(a.x1-a.x0)*.3,y:Math.sign(a.y1-a.y0)*.3},fast,0,glance);}
     else stuckArrow(a.x1*cell,a.y1*cell);return false;});
@@ -3804,9 +3966,17 @@ function step(dt,fast){
 function checkEnd(fast){
   if(B.over)return;
   const fight=x=>B.men.filter(m=>m.alive&&m.side===x&&!B.regs[m.reg].rout).length;
+  for(const side of ['blue','red']){
+    if(!B.reserve[side].length||fight(side)>12)continue;
+    if(aliveCount(side)>24&&fight(side)>0)continue;
+    for(const m of B.men)if(m.alive&&m.side===side&&B.regs[m.reg].rout){m.alive=false;m.fled=true;B.stats[side].fled++;}
+    const wave=B.reserve[side].shift();
+    addBattleGroups(wave);B.waveAt=B.time;B.waves[side]++;
+    if(!fast)log(`กำลังเสริม${side==='blue'?'ฝ่ายเรา':'ฝ่ายตรงข้าม'} ${total(wave)} นาย เข้าสนาม`);
+  }
   const b=fight('blue'),r=fight('red');let w=null;
   if(!b)w='red';else if(!r)w='blue';
-  else if(B.time>=(SG?320:240)){if(SG)w=SG.def;else{const sc=s=>B.men.filter(m=>m.alive&&m.side===s).reduce((a,m)=>a+m.hp/m.max,0);w=sc('blue')>sc('red')?'blue':'red';}if(!fast)log(SG?'หมดเวลา ฝ่ายตั้งรับรักษาเมืองไว้ได้':'หมดเวลา');}
+  else if(B.time-B.waveAt>=(SG?320:240)){if(SG)w=SG.def;else{const sc=s=>B.men.filter(m=>m.alive&&m.side===s).reduce((a,m)=>a+m.hp/m.max,0);w=sc('blue')>sc('red')?'blue':'red';}if(!fast)log(SG?'หมดเวลา ฝ่ายตั้งรับรักษาเมืองไว้ได้':'หมดเวลา');}
   if(w){const lose=w==='blue'?'red':'blue';
     // the beaten side breaks and keeps running; the winners stop and cheer, then the result comes up
     for(const g of B.regs)if(g.side===lose&&!g.rout){g.rout=true;for(const m of g.men){m.swing=-1;m.pend=null;m.aim=-1;}}
@@ -3816,7 +3986,20 @@ function checkEnd(fast){
 }
 $('#bSound').onclick=()=>{soundOn=!soundOn;initAudio();const b=$('#bSound');b.classList.toggle('on',soundOn);b.setAttribute('aria-pressed',soundOn);b.textContent=soundOn?'เสียงเปิด':'เสียงปิด';};
 document.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>{speed=+b.dataset.sp;document.querySelectorAll('[data-sp]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',x===b);});});
-$('#bSkip').onclick=()=>{if(!B||B.over)return;B.parts=[];B.fx=[];let n=0;while(!B.over&&n++<8000)step(1/20,true);for(const m of B.men)if(m.dying>=0){bakeCorpse(m);m.dying=-2;}$('#bSkip').disabled=B.over;renderBtop();};
+$('#bSkip').onclick=()=>{
+  if(!B||B.over||B.skipping)return;
+  const battle=B,button=$('#bSkip');battle.skipping=true;button.disabled=true;button.textContent='กำลังคำนวณผล';
+  B.parts=[];B.fx=[];
+  const advance=()=>{
+    if(B!==battle)return;
+    const deadline=performance.now()+12;
+    do{step(1/20,true);}while(!B.over&&performance.now()<deadline);
+    renderBtop();
+    if(!B.over){requestAnimationFrame(advance);return;}
+    battle.skipping=false;button.textContent='ข้ามไปดูผล';
+  };
+  requestAnimationFrame(advance);
+};
 function drawBattle(now){
   ctx.save();
   if(now<B.shake){const k=Math.min(1,(B.shake-now)/220)*cell*.07;ctx.translate((Math.random()-.5)*k,(Math.random()-.5)*k);}
@@ -3832,7 +4015,7 @@ function drawBattle(now){
       flag:m.alive&&g.bearer===m?(g.rout?'rout':!g.eng?'hold':'side'):null,t});}
   for(const a of B.arrows){const k=a.t/a.dur;const x=(a.x0+(a.x1-a.x0)*k)*cell,yb=(a.y0+(a.y1-a.y0)*k)*cell,h=Math.sin(k*Math.PI)*a.h*cell+cell*.3*(1-k);
     const y=yb-h,dx=(a.x1-a.x0)*cell,dy=(a.y1-a.y0)*cell-Math.cos(k*Math.PI)*Math.PI*a.h*cell+cell*.3,L=Math.hypot(dx,dy)||1;
-    ctx.strokeStyle='#efe6cc';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(x-dx/L*6,y-dy/L*6);ctx.lineTo(x,y);ctx.stroke();}
+    const length=a.src.type==='jav'?12:a.src.type==='xbow'?5:8;ctx.strokeStyle='#171511';ctx.lineWidth=a.src.type==='jav'?2:1.5;ctx.beginPath();ctx.moveTo(x-dx/L*length,y-dy/L*length);ctx.lineTo(x,y);ctx.stroke();}
   for(const b of B.balls){const k=b.t/b.dur;const x=(b.x0+(b.x1-b.x0)*k)*cell,yb=(b.y0+(b.y1-b.y0)*k)*cell,h=Math.sin(k*Math.PI)*b.h*cell+cell*.15*(1-k);
     const br=b.stone?cell*.075:cell*.045;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(x,yb,br,br*.5,0,0,7);ctx.fill();ctx.fillStyle=b.stone?'#857e70':'#1a1a1a';ctx.beginPath();ctx.arc(x,yb-h,br,0,7);ctx.fill();if(b.stone){ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1;ctx.stroke();}}
   for(const r of B.rolls){ctx.fillStyle='#1a1a1a';ctx.beginPath();ctx.arc(r.x*cell,r.y*cell-cell*.03,cell*.04,0,7);ctx.fill();if(Math.random()<.4)dust(r.x*cell,r.y*cell);}
@@ -3862,7 +4045,8 @@ function battleResult(){
   if(trial){
     if(window.SFX)SFX.amb(false,0,0);
     openSheet(`<h2>${won?'ชนะศึกซ้อม':'ทัพคู่ซ้อมชนะ'}</h2>
-      <p>เหลือทัพสยาม ${aliveCount('blue')} นาย · ทัพคู่ซ้อม ${aliveCount('red')} นาย</p>
+      <p>เหลือในสนาม ${aliveCount('blue')} ต่อ ${aliveCount('red')} นาย · สำรอง ${reserveCount(B.reserve.blue)} ต่อ ${reserveCount(B.reserve.red)} นาย</p>
+      <p>ลงสนาม ${B.waves.blue} ต่อ ${B.waves.red} ระลอก</p>
       <button class="btn gold big" id="rBack" type="button">กลับไปเลือกสนาม</button>`);
     $('#rBack').onclick=()=>{leaveTrial();$('#trialBtn').click();};
     return;
@@ -3885,10 +4069,11 @@ function battleResult(){
     const loot=Math.round(foeS*7*rnd(.8,1.25))+(foe.kind==='town'?(foe.town.s==='k'?300:120):0);G.gold+=loot;const food=Math.round(foeS*.5)+ri(2,6);G.food+=food;
     for(const o of G.officers.filter(offFree))offXp(o,Math.round(foeS*3));
     G.gen.xp+=Math.round(foeS*6);let lvUp=false;while(G.gen.xp>=60*G.gen.lv){G.gen.xp-=60*G.gen.lv;G.gen.lv++;G.gen.pts+=2;lvUp=true;}
+    if(foe.kind==='raid'){foe.town.raidedUntil=G.day+4;foe.town.stock={};}
     if(foe.kind==='bandit')G.bandits=G.bandits.filter(x=>x!==foe.ref);
     if(foe.kind==='army'||foe.kind==='defend')G.armies=G.armies.filter(x=>x!==foe.ref);
     const ready=G.army.some(e=>XPN[TROOPS[e.id].tier]&&Math.min(e.n-e.w,Math.floor(e.xp/XPN[TROOPS[e.id].tier]))>0);
-    const title=foe.kind==='town'?`ตีแตก! ทลายกำแพง${foe.name}ได้`:foe.kind==='defend'?`รักษา${foe.town.n}ไว้ได้!`:`ชนะ! ${foe.name}แตกพ่าย`;
+    const title=foe.kind==='raid'?`ปล้น${foe.town.n}สำเร็จ · หมู่บ้านฟื้นตัวใน 4 วัน`:foe.kind==='town'?`ตีแตก! ทลายกำแพง${foe.name}ได้`:foe.kind==='defend'?`รักษา${foe.town.n}ไว้ได้!`:`ชนะ! ${foe.name}แตกพ่าย`;
     html=`<h2 style="color:var(--good)">${title}</h2>
       <div class="list">
         <div class="item"><div class="t"><b>ยึดของได้ ${loot} ทอง · เสบียง ${food} · จับเชลย ${captured} คน</b><small>${captured?'ขังเชลยไว้นาน ๆ อาจยอมเข้าร่วมทัพ หรือแอบหนี':'ไม่มีใครถูกจับเป็น'}</small></div></div>
@@ -3944,7 +4129,7 @@ function loop(now){
     if(G&&!$('#mapScreen').hidden){if(!sheetOpen())mapStep(dtReal);drawMap();if(Math.floor(now/120)!==loop.h){loop.h=Math.floor(now/120);renderHud();}}
     if(!$('#battleScreen').hidden){
       if(phase==='deploy'){if(Math.floor(now/100)!==loop.f){loop.f=Math.floor(now/100);drawDeploy();window.FX&&FX.dirty();}}
-      else if(B){if(phase==='battle'&&!(B.over&&B.resShown)){const dt=dtReal*Math.min(speed,B.over?1:speed),n=Math.max(1,Math.ceil(dt/.02));for(let i=0;i<n;i++)step(dt/n,false);if(now-B.topT>300){renderBtop();B.topT=now;}
+      else if(B){if(phase==='battle'&&!B.skipping&&!(B.over&&B.resShown)){const dt=dtReal*Math.min(speed,B.over?1:speed),n=Math.max(1,Math.ceil(dt/.02));for(let i=0;i<n;i++)step(dt/n,false);if(now-B.topT>300){renderBtop();B.topT=now;}
           if(B.over&&!B.resShown&&B.time-B.endT>4.2){B.resShown=true;battleResult();}}
         else if(B.over){for(const m of B.men){if(m.dying>=0){m.dying+=dtReal/.5;if(m.dying>=1){bakeCorpse(m);m.dying=-2;}}if(m.alive){m.swing=-1;m.moving=false;m.fight=false;}}}
         drawBattle(now);if(window.FX){FX.dirty();FX.blood(B.men.reduce((a,m)=>a+(m.alive?0:1),0)/Math.max(1,B.men.length)*1.6);
