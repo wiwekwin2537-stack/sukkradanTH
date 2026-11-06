@@ -346,7 +346,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
         <button class="btn" id="bVolley" type="button" aria-pressed="false" disabled>ระดมยิงปืนไฟ</button>
         <button class="btn" id="bFlank" type="button" aria-pressed="false" disabled>ปักจุดอ้อมตี</button>
       </div>
-      <small class="muted">รักษาแนวจะยืนที่เดิม · ระดมยิงใช้กับปืนไฟ · ปักจุดอ้อมตีแล้วแตะช่องในสนาม</small>
+      <small class="muted">รักษาแนวจนต้องเข้าตอบโต้เมื่อถูกยิงฝ่ายเดียว · ระดมยิงใช้กับปืนไฟ · แตะสนามเพื่อปักจุดอ้อมตี</small>
       <div class="lbl">รูปขบวน</div>
       <div class="row" role="group" aria-label="รูปขบวน">
         <button class="btn grow" type="button" data-formation="line" aria-pressed="false" disabled>┃ แนวแถว</button>
@@ -4501,7 +4501,9 @@ function searchGridPath(sc,sr,gc,gr,m){const prev=new Array(COLS*ROWS).fill(-2);
       const j=nr*COLS+nc;if(prev[j]!==-2)continue;prev[j]=i;q.push(j);}}
   if(prev[goal]===-2)return null;const path=[];for(let i=goal;i!==-1;i=prev[i])path.unshift(i);return path;}
 function waypoint(m,tx,ty,dt){
-  if(lineClear(m.x,m.y,tx,ty,m)){m.wp=null;m.nopath=false;return[tx,ty];}
+  if(lineClear(m.x,m.y,tx,ty,m)){m.wp=null;m.nopath=false;m.pathT=0;return[tx,ty];}
+  const goal=targetCell(tx,ty);
+  if(m.pathGoal!==goal){m.pathGoal=goal;m.pathT=0;}
   m.pathT-=dt;
   if(m.pathT<=0){m.pathT=.5+Math.random()*.3;
     const cl=(v,a)=>Math.max(0,Math.min(a-1,Math.floor(v)));const p=gridPath(cl(m.x,COLS),cl(m.y,ROWS),cl(tx,COLS),cl(ty,ROWS),m);m.wp=null;m.nopath=!p;
@@ -4548,12 +4550,32 @@ const regName=g=>g.tid==='gen'?`แม่ทัพ${playerName()}`:g.tid==='off'
 function fxText(x,y,s){if(B)B.fx.push({x,y,s,t0:performance.now()});}
 function terrMul(m){const t=terAt(m.x,m.y);if(t==='f')return MOUNT[m.type]?.45:.65;if(t==='h')return .85;if(t==='b'||t==='s'||t==='r')return .9;return 1;}
 function blocked(x,y,m){const c=Math.floor(x),r=Math.floor(y);if(!inB(c,r))return !B.regs[m.reg].rout;return !passFor(c,r,m.side,m.type);}
-function pickTarget(m,crowd){let best=null,bs=1e9;const melee=!RANGED[m.type];
-  for(const e of B.active){if(!e.alive||e.side===m.side)continue;let s=dist(m,e);if((VS[m.type][e.type]||1)>1)s-=.9;if(e===m.tgt)s-=.25;
-    if(melee)s+=(crowd.get(e.id)||0)*.16;if(B.regs[e.reg].rout)s+=MOUNT[m.type]?1:3;if(melee&&SG&&terAt(e.x,e.y)==='W')s+=6;if(s<bs){bs=s;best=e;}}return best;}
+const targetCell=(x,y)=>Math.floor(x)+COLS*Math.floor(y);
+function pickTarget(m,crowd){
+  let best=null,bs=Infinity;
+  const melee=!RANGED[m.type],g=B.regs[m.reg];
+  for(const e of B.active){
+    if(!e.alive||e.side===m.side)continue;
+    let score=dist(m,e);
+    if((VS[m.type][e.type]||1)>1)score-=.9;
+    if(e===m.tgt)score-=.25;
+    if(melee)score+=(crowd.get(e.id)||0)*.16;
+    if(B.regs[e.reg].rout)score+=100;
+    if(melee&&SG&&terAt(e.x,e.y)==='W')score+=6;
+    if(m.blockedTarget===targetCell(e.x,e.y)&&B.time<m.blockedUntil)score+=40;
+    if(g.counter&&e===g.threat)score-=2;
+    if(score<bs){bs=score;best=e;}
+  }
+  return best;
+}
 function steerTo(m,wx,wy,dt,mul){const dx=wx-m.x,dy=wy-m.y,L=Math.hypot(dx,dy)||1;
   const spd=MS[m.type].spd*(mul||1)*terrMul(m)*(m.spdM||1)*(.6+.4*(m.sta==null?1:m.sta));const k=Math.min(1,dt*(MOUNT[m.type]?1.8:5));m.vx+=(dx/L*spd-m.vx)*k;m.vy+=(dy/L*spd-m.vy)*k;}
 function steer(m,tx,ty,dt,mul){const w=waypoint(m,tx,ty,dt);if(!w)return false;steerTo(m,w[0],w[1],dt,mul);return true;}
+function pursue(m,t,dt,mul){
+  if(steer(m,t.x,t.y,dt,mul))return true;
+  m.blockedTarget=targetCell(t.x,t.y);m.blockedUntil=B.time+1.5;m.rt=Math.min(m.rt,.15);
+  return false;
+}
 function brake(m,dt){const k=Math.pow(.002,dt);m.vx*=k;m.vy*=k;}
 function faceTo(m,t,dt){const a=Math.atan2(t.y-m.y,t.x-m.x);let d=a-m.face;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;m.face+=d*Math.min(1,dt*10);}
 const reachOf=(m,t)=>MS[m.type].reach+MS[m.type].rad+MS[t.type].rad+.02;
@@ -4566,16 +4588,39 @@ function gateAssault(m,dt){
     if(m.cd<=0&&m.swing<0){m.swing=0;m.cd=MS[m.type].cd*(.85+Math.random()*.3);m.pend={t:.17,gate:g};}return;}
   const w=waypoint(m,tx+out*.25,ty,dt);if(w)steerTo(m,w[0],w[1],dt);else steerTo(m,tx+out*.25,ty,dt);
 }
-function breakGate(g,fast){g.broken=true;terrain[g.r][g.c]='r';pathCache.clear();buildBg();for(const m of B.field){m.wp=null;m.pathT=0;m.nopath=false;}
+function breakGate(g,fast){g.broken=true;terrain[g.r][g.c]='r';pathCache.clear();buildBg();for(const m of B.field){m.wp=null;m.pathT=0;m.nopath=false;m.blockedTarget=null;}
   for(const r of B.fieldRegs)r.eng=true;
   if(!fast){log('ประตูเมืองพังแล้ว! ทหารกรูกันเข้าไป');banner('ประตูพัง!');B.shake=performance.now()+400;sfx('thud');sfx('charge');for(let i=0;i<14;i++)dust((g.c+.5)*cell,(g.r+.6)*cell,true);window.FX&&FX.gate((g.c+.5)*cell,(g.r+.6)*cell);}}
 const shootRange=(type,tile)=>MS[type].range+((tile==='h'||tile==='W')?1:0);
-const holdsGround=g=>g.side==='blue'&&(g.order==='hold'||g.order==='volley');
+const holdsGround=g=>g.side==='blue'&&!g.counter&&(g.order==='hold'||g.order==='volley');
+function canCounterFire(g){
+  return !g.counter&&(holdsGround(g)||(canStandOnWall(g.side,g.type)&&g.men.some(m=>m.alive&&terAt(m.x,m.y)==='W')));
+}
+function recordRangedThreat(g,attacker){
+  if(g.rout||!attacker.alive||!canCounterFire(g))return;
+  if(g.threatAt==null||B.time-g.threatAt>3.2)g.threatSince=B.time;
+  g.threat=attacker;g.threatAt=B.time;
+}
+function respondToFire(g,units,live,fast){
+  if(g.rout||!g.threat?.alive||B.time-g.threatSince<1.2||B.time-g.threatAt>3.2||!canCounterFire(g))return;
+  if(B.time<(g.counterCheckAt||0))return;
+  g.counterCheckAt=B.time+.32;
+  const hasAnswer=units.some(m=>live.some(e=>{
+    if(!e.alive||e.side===g.side||B.regs[e.reg].rout)return false;
+    const range=RANGED[m.type]?shootRange(m.type,terAt(m.x,m.y)):reachOf(m,e);
+    return dist(m,e)<=range&&(RANGED[m.type]||lineClear(m.x,m.y,e.x,e.y,m));
+  }));
+  if(hasAnswer)return;
+  g.counter=true;g.eng=true;
+  for(const m of units)m.rt=0;
+  if(!fast)log(`${regName(g)} ออกจากแนวตอบโต้แนวยิงข้าศึก!`);
+}
+
 function volleyTarget(m){
   const range=shootRange(m.type,terAt(m.x,m.y));
   let target=null,closest=range;
   for(const e of B.active){
-    if(!e.alive||e.side===m.side)continue;
+    if(!e.alive||e.side===m.side||B.regs[e.reg].rout)continue;
     const d=dist(m,e);if(d>.55&&d<=closest){target=e;closest=d;}
   }
   return target;
@@ -4622,7 +4667,13 @@ function think(m,dt,fast,crowd){
   m.guard=false;m.cheer=false;
   if(B.over&&m.side===B.winner){m.cheer=true;m.swing=-1;m.aim=-1;m.pend=null;m.fight=false;brake(m,dt);return;}
   if(g.rout){const homeX=m.side==='blue'?COLS+.5:-.5,hc=m.side==='blue'?COLS-1:0;const tx=Math.floor(m.x)===hc?homeX:hc+.5;if(!steer(m,tx,m.y,dt,1.15))brake(m,dt);return;}
-  if(m.react>0){m.react-=dt;brake(m,dt);return;}
+  if(m.react>0){
+    if(SHIELD[m.type]&&B.time-(g.arrowT??-9)<2.6){
+      m.guard=true;const threat=g.threat?.alive?g.threat:m.tgt;
+      if(threat?.alive)faceTo(m,threat,dt);
+    }
+    m.react-=dt;brake(m,dt);return;
+  }
   if(g.order==='volley'&&m.aim>=0){
     if(m.aimTarget?.alive)faceTo(m,m.aimTarget,dt);
     brake(m,dt);m.fight=true;return;
@@ -4638,7 +4689,7 @@ function think(m,dt,fast,crowd){
     if(!m.lastStand&&mates.length<=last){m.lastStand=true;if(!fast&&m.side==='blue'){log(`แม่ทัพ${playerName()}ควบม้าออกศึกเอง!`);banner('แม่ทัพออกศึก!');}}}
   const onWall=SG&&terAt(m.x,m.y)==='W';
   // shield men raise shields while waiting or while arrows are falling on them, until the enemy is at arm's length
-  if(SHIELD[m.type]&&d>.75&&(holding||!g.eng||B.time-(g.arrowT||-9)<2.6))m.guard=true;
+  if(SHIELD[m.type]&&d>.75&&(holding||!g.eng||B.time-(g.arrowT??-9)<2.6)){m.guard=true;faceTo(m,g.threat?.alive?g.threat:t,dt);}
   // let beaten men run: foot soldiers don't chase routers far, horsemen only a short way
   if(B.regs[t.reg].rout&&!RANGED[m.type]&&d>(MOUNT[m.type]?2.2:.9)){brake(m,dt);m.rt=Math.min(m.rt,.2);return;}
   if(!holding&&ART[m.type]&&SG&&m.side!==SG.def){const gs=SG.gates.filter(q=>!q.broken);
@@ -4648,15 +4699,15 @@ function think(m,dt,fast,crowd){
   if(RANGED[m.type]&&(d>.55||onWall||ART[m.type])){const rg=shootRange(m.type,terAt(m.x,m.y));
     if(d<=rg){brake(m,dt);faceTo(m,t,dt);m.fight=true;if(g.order!=='volley'&&m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}
     if(holding){holdPost(m,dt);return;}
-    if(!g.eng||onWall||ART[m.type]){brake(m,dt);return;}
-    if(!steer(m,t.x,t.y,dt,m.type==='gun'?.75:.5))brake(m,dt);return;}
+    if(!g.eng||(onWall&&!g.counter)){brake(m,dt);return;}
+    if(!pursue(m,t,dt,m.type==='gun'?.75:.5))brake(m,dt);return;}
   if(d<=reachOf(m,t)){m.fight=true;brake(m,dt);faceTo(m,t,dt);
     if(m.cd<=0&&m.swing<0){m.swing=0;m.cd=st.cd*(.85+Math.random()*.3);m.pend={t:.17,d:t,charge:MOUNT[m.type]&&m.charge>.45};}return;}
   if(holding){holdPost(m,dt);return;}
   if(!g.eng){brake(m,dt);return;}
   // march at a walk, break into a run only for the last stretch
-  const mul=MOUNT[m.type]?(d<3.2?1:.5):(d<1.7?1:.48)*(m.guard?.8:1);
-  if(!steer(m,t.x,t.y,dt,mul)){if(SG&&m.side!==SG.def)gateAssault(m,dt);else brake(m,dt);}
+  const mul=MOUNT[m.type]?(g.counter||d<3.2?1:.5):(g.counter||d<1.7?1:.48)*(m.guard?.8:1);
+  if(!pursue(m,t,dt,mul)){if(SG&&m.side!==SG.def)gateAssault(m,dt);else brake(m,dt);}
 }
 function fire(m,fast){if(m.type==='gun')return fireGun(m,fast);if(m.type==='can')return fireCannon(m,fast);if(m.type==='cat')return fireStone(m,fast);fireArrow(m,fast);}
 function fireStone(m,fast){const g=m.aimGate,t=m.tgt;if(!g&&(!t||!t.alive))return;
@@ -4767,9 +4818,14 @@ function strike(a,d,charge,fast){
   hurt(d,st.atk*mult*.85,a,{x:-ux/L,y:-uy/L},fast,.06,glance);
 }
 function hurt(d,dmg,src,dir,fast,knock,glance){
-  if(!d.alive)return;d.hp-=dmg;B.regs[d.reg].eng=true;if(!glance)d.wound=Math.min(4,(d.wound||0)+1);
+  if(!d.alive)return;
+  const reg=B.regs[d.reg];d.hp-=dmg;reg.eng=true;
+  if(RANGED[src.type])recordRangedThreat(reg,src);
+  if(!glance)d.wound=Math.min(4,(d.wound||0)+1);
   if(knock&&!ART[d.type]){const k=knock*(MOUNT[d.type]?.4:1);const nx=d.x+dir.x*k,ny=d.y+dir.y*k;if(!blocked(nx,ny,d)){d.x=nx;d.y=ny;}}
-  if(d.hp>0&&!ART[d.type])d.react=Math.max(d.react||0,glance?.1:.3);
+  if(d.hp>0&&!ART[d.type]&&B.time>=(d.reactAt||0)){
+    d.react=Math.max(d.react||0,glance?.1:.24);d.reactAt=B.time+.65;
+  }
   if(!fast&&!glance){
     burst(d.x*cell,(d.y-.18)*cell,d.hp<=0?(largeBattle?2:4):dmg>=14?2:1,dir.x,dir.y);
     sfx('flesh',d.x);
@@ -4793,7 +4849,7 @@ function step(dt,fast){
   const crowd=new Map();for(const m of live)if(m.tgt&&!RANGED[m.type])crowd.set(m.tgt.id,(crowd.get(m.tgt.id)||0)+1);
   B.fieldRegs=B.fieldRegs.filter(g=>g.men.some(m=>m.alive));
   for(const g of B.fieldRegs){const al=g.men.filter(m=>m.alive);g.chk-=dt;
-    if(!B.over)volleyOrder(g,al,fast);
+    if(!B.over){respondToFire(g,al,live,fast);volleyOrder(g,al,fast);}
     if(!holdsGround(g)&&!g.eng&&g.chk<=0){g.chk=.25;const cx=al.reduce((a,m)=>a+m.x,0)/al.length,cy=al.reduce((a,m)=>a+m.y,0)/al.length;
       if(B.time-g.enteredAt>16||live.some(e=>e.side!==g.side&&Math.abs(e.x-cx)<3.2&&Math.abs(e.y-cy)<3.2))g.eng=true;}
     g.routChk-=dt;
@@ -4820,7 +4876,7 @@ function step(dt,fast){
     if(MOUNT[m.type]){if(sp>MS[m.type].spd*.62)m.charge+=dt;else m.charge=Math.max(0,m.charge-dt*2);}}
   collide(live.filter(m=>m.alive));
   B.arrows=B.arrows.filter(a=>{a.t+=dt;if(a.t<a.dur)return true;let hit=null,hd=.12;
-    for(const e of B.active){if(!e.alive||e.side===a.side)continue;const d=Math.hypot(e.x-a.x1,e.y-a.y1);if(d<hd){hd=d;hit=e;}if(d<.9)B.regs[e.reg].arrowT=B.time;}
+    for(const e of B.active){if(!e.alive||e.side===a.side)continue;const d=Math.hypot(e.x-a.x1,e.y-a.y1);if(d<hd){hd=d;hit=e;}if(d<.9){const reg=B.regs[e.reg];reg.arrowT=B.time;recordRangedThreat(reg,a.src);}}
     if(hit){const ux=a.x1-a.x0,uy=a.y1-a.y0,uL=Math.hypot(ux,uy)||1,facing=-(Math.cos(hit.face)*ux+Math.sin(hit.face)*uy)/uL;
       if(hit.guard&&facing>-.2&&Math.random()<SHIELD[hit.type]){if(!fast){if(B.parts.length<particleLimit())B.parts.push({k:'chip',x:hit.x*cell,y:(hit.y-.3)*cell,z:2,vx:(Math.random()-.5),vy:-.3,vz:1.2,life:1});sfx('thud',hit.x);}
         if(Math.random()<.5)stuckArrow((hit.x+(Math.random()-.5)*.35)*cell,(hit.y+.05+Math.random()*.15)*cell,a.src.type);return false;}
