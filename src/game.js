@@ -240,7 +240,7 @@ function spawnArmy(fac){
 const mcv=$('#mapCv'),mctx=mcv.getContext('2d');
 let worldBg=null,zoom=1.8,cam={x:0,y:0},camFree=false,mdpr=1;
 let terrCv=null,terrDirty=true,landMask=null,TS=4;
-let terrainAtlas=null,fieldArt=null;
+let terrainAtlas=null,fieldArt=null,campaignArt=null,settlementArt=null;
 const terrainTiles=new Map(),materialOffsets={grass:[0,0],dirt:[1,0],forest:[0,1],water:[1,1]};
 function paintMaterial(g,material,x,y,w,h,size,alpha){
   if(!terrainAtlas)return;
@@ -260,8 +260,8 @@ function paintMaterial(g,material,x,y,w,h,size,alpha){
 function mtnP(lat,lon){let p=0;if(lat>17.3)p=.55;if(lon<99.1&&lat>13.5)p=.7;if(lat<11&&lat>7.5&&lon<99.4)p=.35;if(lon>100.8&&lon<101.6&&lat>15.2&&lat<17.6)p=.5;if(lat>13.8&&lat<14.6&&lon>101.3&&lon<102.6)p=.4;return p;}
 function forestP(lat,x){let p=.18;if(lat>16.5)p=.32;if(lat<11)p=.45;if(lat>13.6&&lat<15.8&&x>300&&x<480)p=.04;return p;}
 function buildWorld(){
-  const sc=1.5;worldBg=document.createElement('canvas');worldBg.width=WORLD_W*sc;worldBg.height=WORLD_H*sc;
-  const g=worldBg.getContext('2d');g.scale(sc,sc);const R=rng(42);
+  const sc=2;worldBg=document.createElement('canvas');worldBg.width=WORLD_W*sc;worldBg.height=WORLD_H*sc;
+  const g=worldBg.getContext('2d');g.scale(sc,sc);g.imageSmoothingQuality='high';const R=rng(42);
   g.fillStyle='#173847';g.fillRect(0,0,WORLD_W,WORLD_H);
   paintMaterial(g,'water',0,0,WORLD_W,WORLD_H,205,.65);
   g.strokeStyle='rgba(160,200,225,.13)';g.lineWidth=1;
@@ -271,8 +271,15 @@ function buildWorld(){
   g.fillStyle='#50613b';g.fill(path);
   g.save();g.clip(path);
   paintMaterial(g,'grass',0,0,WORLD_W,WORLD_H,230,.9);
+  if(campaignArt){
+    g.globalAlpha=.86;
+    g.drawImage(campaignArt,0,0,WORLD_W,WORLD_H/2);
+    g.save();g.translate(0,WORLD_H);g.scale(1,-1);
+    g.drawImage(campaignArt,0,0,WORLD_W,WORLD_H/2);g.restore();
+    g.globalAlpha=1;
+  }
   const blob=(lon,lat,rx,ry,col)=>{const[x,y]=W2(lon,lat);g.save();g.translate(x,y);g.scale(1,ry/rx);const gr=g.createRadialGradient(0,0,0,0,0,rx);gr.addColorStop(0,col);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.beginPath();g.arc(0,0,rx,0,7);g.fill();g.restore();};
-  blob(100.3,15.0,170,260,'rgba(150,170,80,.55)');blob(103.2,15.9,260,190,'rgba(165,150,90,.5)');blob(99.2,18.6,230,200,'rgba(40,70,35,.5)');blob(99.6,8.6,120,260,'rgba(40,80,40,.35)');
+  blob(100.3,15.0,170,260,'rgba(150,170,80,.38)');blob(103.2,15.9,260,190,'rgba(165,150,90,.36)');blob(99.2,18.6,230,200,'rgba(40,70,35,.5)');blob(99.6,8.6,120,260,'rgba(40,80,40,.35)');
   for(let i=0;i<9000;i++){const x=R()*WORLD_W,y=R()*WORLD_H,k=R();g.fillStyle=k<.5?'rgba(25,50,20,.25)':k<.85?'rgba(140,170,80,.18)':'rgba(190,170,110,.2)';g.fillRect(x,y,1+R()*2,1+R()*1.5);}
   for(let i=0;i<160;i++){const[x0,y0]=W2(rnd(99.7,101.1),rnd(13.6,16.2));g.strokeStyle='rgba(210,215,120,.07)';g.lineWidth=.6;g.strokeRect(x0,y0,ri(4,8),ri(3,5));}
   for(const [lon,lat,rx,ry] of [[98.8,18.9,85,130],[100.5,18.9,80,125],[98.8,15.5,60,130],[101.2,17.1,70,90],[99,9.8,48,120],[100.6,6.9,68,58]]){
@@ -330,7 +337,18 @@ function drawBanner(g,x,y,k,color,em,num,badge){
     const bx=x-tw/2,by=fy-15*k;g.fillStyle=badge||'rgba(15,20,15,.85)';rrect(g,bx,by,tw,13*k,4*k);g.fill();
     g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(s,x,by+6.8*k);}
 }
+function settlementSprite(t){
+  if(t.s==='v')return [0,46];
+  if(t.s==='k')return [2,71];
+  if(t.founded)return [3,51];
+  return [1,57];
+}
 function drawTownAt(g,t,x,y,k,label){
+  if(label&&settlementArt){
+    const [index,size]=settlementSprite(t);
+    const w=size*k,h=w*320/384;
+    g.drawImage(settlementArt,index%2*384,Math.floor(index/2)*320,384,320,x-w/2,y+5*k-h,w,h);
+  }else{
   if(t.s==='v'){const R=rng(Math.round(t.x*7+t.y));for(let i=0;i<4;i++){const hx=x+(R()-.5)*22*k,hy=y+(R()-.5)*12*k;
       g.fillStyle='rgba(0,0,0,.25)';g.fillRect(hx-4*k,hy+1*k,9*k,2*k);g.fillStyle='#8b6a42';g.fillRect(hx-4*k,hy-4*k,8*k,5*k);
       g.fillStyle='#c9a25a';g.beginPath();g.moveTo(hx-6*k,hy-3.5*k);g.lineTo(hx,hy-9*k);g.lineTo(hx+6*k,hy-3.5*k);g.fill();
@@ -344,6 +362,7 @@ function drawTownAt(g,t,x,y,k,label){
     for(const tx of[-16,13]){g.fillStyle='#b6ae96';g.fillRect(x+tx*k,y-17*k,5*k,19*k);g.fillStyle='#7a2a1a';g.beginPath();g.moveTo(x+(tx-1)*k,y-17*k);g.lineTo(x+(tx+2.5)*k,y-23*k);g.lineTo(x+(tx+6)*k,y-17*k);g.fill();}
     g.fillStyle='#c4bba2';g.fillRect(x-5*k,y-20*k,10*k,14*k);g.fillStyle='#7a2a1a';g.beginPath();g.moveTo(x-7*k,y-20*k);g.lineTo(x,y-29*k);g.lineTo(x+7*k,y-20*k);g.fill();
     g.fillStyle='#3a2810';g.fillRect(x-3*k,y-4*k,6*k,6*k);for(let i=0;i<7;i++)g.fillRect(x-16*k+i*5*k,y-12*k,2.5*k,2*k);}
+  }
   if(t.farms){
     g.fillStyle='#9c9a42';g.fillRect(x-19*k,y-9*k,7*k,6*k);
     g.strokeStyle='#62592c';g.lineWidth=.65*k;
@@ -456,9 +475,15 @@ function mapMarker(x,y){
   let hit=null,best=Infinity;
   for(const [kind,items] of [['p',G.parties],['b',G.bandits],['a',G.armies],['t',G.towns],['c',G.caves],['q',G.caravans]])for(const item of items){
     const [sx,sy]=w2s(item.x,item.y),dx=x-sx,dy=y-sy;
-    const marker=kind==='t'||kind==='c'
+    let marker=kind==='t'||kind==='c'
       ?Math.min(Math.hypot(dx,dy+10*scale),Math.hypot(Math.max(0,Math.abs(dx)-22*scale),dy-10*scale))
       :Math.min(Math.hypot(dx,dy),Math.hypot(dx-4*scale,dy+28*scale));
+    if(kind==='t'&&settlementArt){
+      const width=settlementSprite(item)[1]*scale;
+      if(Math.abs(dx)<width*.45&&dy>5*scale-width*320/384&&dy<5*scale){
+        marker=Math.min(marker,7+Math.hypot(dx,dy+width*.34)*.2);
+      }
+    }
     if(marker<=18&&marker<best){hit={kind,item};best=marker;}
   }
   return hit;
@@ -615,7 +640,7 @@ function partiesStep(dt){
   }
 }
 function dailyTick(){
-  G.day++;const msgs=[];
+  G.day++;finishCityProjects();const msgs=[];
   produceAndTrade();
   const holdings=myTowns(),tax=holdings.reduce((a,t)=>a+townTax(t),0);if(tax)G.gold+=tax;
   G.food+=holdings.reduce((n,t)=>n+(t.farms||0)*12,0);
@@ -1087,30 +1112,114 @@ function openCave(cave){
   };
 }
 
-const PROJECTS={market:{name:'ตลาด',cost:180,good:'wood',n:8,desc:'+30 ทองต่อวัน'},
-  farms:{name:'ไร่นา',cost:140,good:'rice',n:8,desc:'+12 เสบียงต่อวัน'},
-  barracks:{name:'โรงทหาร',cost:220,good:'stone',n:8,desc:'+70 ความจุทัพ'}};
+const PROJECTS={market:{name:'ตลาด',mark:'▤',cost:180,good:'wood',n:8,days:2,desc:'+30 ทองต่อวัน'},
+  farms:{name:'ไร่นา',mark:'▥',cost:140,good:'rice',n:8,days:2,desc:'+12 เสบียงต่อวัน'},
+  barracks:{name:'โรงทหาร',mark:'⚑',cost:220,good:'stone',n:8,days:3,desc:'+70 ความจุทัพ'},
+  keep:{name:'เมืองป้อม',mark:'♜',cost:800,good:'stone',n:25,food:120,days:5,desc:'ยกค่ายเป็นเมืองป้อม'}};
+const CITY_TILES=Array.from({length:15},(_,i)=>i);
+const CITY_ROAD=new Set([5,6,7,8,9]);
+function initCityLayout(t){
+  t.layout??=Object.fromEntries([['market',1],['farms',10],['barracks',3]].filter(([id])=>t[id]>0).map(([id,i])=>[i,id]));
+  t.buildQueue??=[];
+}
+function projectStatus(t,id){
+  const p=PROJECTS[id],lv=id==='keep'?0:t[id]||0;
+  const cost=p.cost*(lv+1),n=p.n*(lv+1),days=p.days+lv;
+  const reason=t.buildQueue.some(j=>j.id===id)?'กำลังก่อสร้าง'
+    :lv>=3?'เต็มขั้น':id==='keep'&&(t.s!=='c'||!t.founded||!['market','farms','barracks'].every(k=>t[k]>0))?'ต้องสร้างอาคารหลักทั้งสาม'
+    :G.gold<cost?'ทองไม่พอ':t.goods[p.good]<n?'วัสดุไม่พอ':G.food<(p.food||0)?'เสบียงไม่พอ':'';
+  return {p,lv,cost,n,days,reason};
+}
+function validBuildTile(t,id,tile){
+  if(!CITY_TILES.includes(tile)||CITY_ROAD.has(tile)||t.buildQueue.some(job=>job.tile===tile))return false;
+  const existing=Object.keys(t.layout).find(i=>t.layout[i]===id);
+  return existing===undefined?!t.layout[tile]:+existing===tile;
+}
+function queueProject(t,id,tile){
+  if(t.own!=='p'||!PROJECTS[id]||!validBuildTile(t,id,tile))return false;
+  const {p,cost,n,days,reason}=projectStatus(t,id);
+  if(reason)return false;
+  G.gold-=cost;t.goods[p.good]-=n;G.food-=p.food||0;
+  t.buildQueue.push({id,tile,finish:G.day+days});
+  save();return true;
+}
+function finishCityProjects(){
+  for(const t of G.towns){
+    if(!t.buildQueue?.length)continue;
+    t.buildQueue=t.buildQueue.filter(job=>{
+      if(job.finish>G.day)return true;
+      t.layout[job.tile]=job.id;
+      if(job.id==='keep'){t.s='k';t.wall=Math.max(1,t.wall);restock(t);}
+      else t[job.id]=(t[job.id]||0)+1;
+      terrDirty=true;
+      return false;
+    });
+  }
+}
 function cityProjects(t){
   if(t.own!=='p'||t.s==='v')return '';
-  const projects=Object.entries(PROJECTS).map(([id,p])=>{
-    const lv=t[id]||0,cost=p.cost*(lv+1),n=p.n*(lv+1),block=lv>=3?'เต็มขั้น':G.gold<cost?'ทองไม่พอ':t.goods[p.good]<n?'วัสดุไม่พอ':'สร้าง';
-    return `<article class="city-project"><b>${p.name} · ${lv}/3</b><small>${p.desc} ต่อขั้น</small>
-      <small>${cost} ทอง + ${GOODS[p.good].name} ${n}</small><button class="btn" type="button" data-project="${id}"${block==='สร้าง'?'':' disabled'}>${block}</button></article>`;
+  initCityLayout(t);
+  const cards=Object.entries(PROJECTS).filter(([id])=>id!=='keep'||t.founded&&t.s==='c').map(([id])=>{
+    const {p,lv,cost,n,days,reason}=projectStatus(t,id);
+    return `<button class="btn city-build" type="button" data-project="${id}" aria-pressed="false"${reason?' disabled':''}>
+      <b>${p.mark} ${p.name}${id==='keep'?'':` · ${lv}/3`}</b><small>${p.desc}</small>
+      <small>${cost} ทอง + ${GOODS[p.good].name} ${n}${p.food?` + เสบียง ${p.food}`:''}</small>
+      <small>${reason||`${days} วัน`}</small></button>`;
   }).join('');
-  const promote=t.founded&&t.s==='c'?'<button class="btn gold" id="promoteTown" type="button">ยกค่ายเป็นเมืองป้อม · 800 ทอง / 120 เสบียง / 25 หิน</button>':'';
-  return `<div class="sec">สร้างเมือง · ผังสำเร็จรูป</div><div class="city-projects">${projects}</div>${promote}`;
+  const plots=CITY_TILES.map(i=>{
+    if(CITY_ROAD.has(i))return '<span class="city-plot road" aria-hidden="true">ทางเดิน</span>';
+    const job=t.buildQueue.find(x=>x.tile===i),id=job?.id||t.layout[i],p=PROJECTS[id];
+    return `<button class="city-plot ${job?'working':p?'built':''}" type="button" data-city-tile="${i}"
+      aria-label="${p?p.name:'พื้นที่ว่าง'} ช่อง ${i+1}"><b>${p?p.mark:'＋'}</b><span>${job?`อีก ${job.finish-G.day} วัน`:p?p.name:'พื้นที่ว่าง'}</span></button>`;
+  }).join('');
+  const queue=t.buildQueue.map(job=>`<li>${PROJECTS[job.id].name} · กำลังก่อสร้าง · เหลือ ${job.finish-G.day} วัน</li>`).join('');
+  return `<div class="sec">ผังสร้างเมือง</div><p id="cityBuildHint" role="status">ลากแบบอาคารมาวางบนพื้นที่ว่าง หรือแตะแบบแล้วแตะช่อง</p>
+    <div class="city-layout" role="group" aria-label="ผังเมือง">${plots}</div><div class="city-projects">${cards}</div>
+    <div class="sec">คิวก่อสร้าง · วันที่ ${G.day}</div>${queue?`<ul class="build-queue">${queue}</ul>`:'<small>ยังไม่มีอาคารกำลังก่อสร้าง</small>'}
+    <button class="btn" type="button" id="buildWait">รอ 1 วัน · คิดค่าจ้างและเสบียงตามปกติ</button>`;
 }
 function bindCityProjects(t){
-  document.querySelectorAll('[data-project]').forEach(button=>button.onclick=()=>{
-    const id=button.dataset.project,lv=t[id]||0,p=PROJECTS[id],cost=p.cost*(lv+1),n=p.n*(lv+1);
-    if(lv>=3||G.gold<cost||t.goods[p.good]<n)return;
-    G.gold-=cost;t.goods[p.good]-=n;t[id]=lv+1;save();openTown(t,'develop');
-  });
-  const promote=$('#promoteTown');if(!promote)return;
-  const ready=Object.keys(PROJECTS).every(id=>t[id]>0)&&G.gold>=800&&G.food>=120&&t.goods.stone>=25;
-  promote.disabled=!ready;
-  if(!ready)promote.insertAdjacentHTML('afterend','<small>ต้องมีตลาด ไร่นา และโรงทหารอย่างน้อยขั้น 1 พร้อมทรัพยากรครบ</small>');
-  promote.onclick=()=>{G.gold-=800;G.food-=120;t.goods.stone-=25;t.s='k';t.wall=Math.max(1,t.wall);restock(t);terrDirty=true;save();openTown(t,'develop');};
+  const cards=[...document.querySelectorAll('[data-project]')],tiles=[...document.querySelectorAll('[data-city-tile]')],hint=$('#cityBuildHint');
+  if(!hint)return;
+  let selected=null,drag=null;
+  const select=id=>{
+    selected=id;
+    cards.forEach(b=>b.setAttribute('aria-pressed',b.dataset.project===id));
+    tiles.forEach(b=>b.classList.toggle('placeable',validBuildTile(t,id,+b.dataset.cityTile)));
+    hint.textContent=`เลือก ${PROJECTS[id].name} · วางในช่องที่มีกรอบทอง`;
+  };
+  const place=tile=>{
+    if(!selected)return;
+    if(!queueProject(t,selected,tile)){hint.textContent='วางที่นี่ไม่ได้ · เลือกช่องที่มีกรอบทอง';return;}
+    openTown(t,'develop');
+  };
+  const cancel=()=>{if(drag?.ghost)drag.ghost.remove();drag=null;};
+  for(const b of cards){
+    const id=b.dataset.project;
+    b.onclick=()=>select(id);
+    b.addEventListener('pointerdown',e=>{
+      if(e.button!==0||!e.isPrimary)return;
+      b.setPointerCapture(e.pointerId);select(id);
+      drag={id:e.pointerId,x:e.clientX,y:e.clientY,ghost:null};
+    });
+    b.addEventListener('pointermove',e=>{
+      if(drag?.id!==e.pointerId)return;
+      if(!drag.ghost&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7){
+        const g=document.createElement('span');g.className='build-ghost';g.textContent=PROJECTS[id].name;
+        document.body.appendChild(g);drag.ghost=g;
+      }
+      if(drag.ghost){drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';}
+    });
+    b.addEventListener('pointerup',e=>{
+      if(drag?.id!==e.pointerId)return;
+      const tile=drag.ghost&&document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-city-tile]');
+      cancel();if(tile)place(+tile.dataset.cityTile);
+    });
+    b.addEventListener('pointercancel',cancel);
+    b.addEventListener('lostpointercapture',cancel);
+  }
+  tiles.forEach(b=>b.onclick=()=>place(+b.dataset.cityTile));
+  $('#buildWait').onclick=()=>{dailyTick();openTown(t,'develop');};
 }
 function tradePanel(t,hostile){
   const mine=ownerOf(t)==='p',route=G.caravans.find(c=>c.from===t.n&&c.kind!=='patrol'),report=t.lastShipment;
@@ -1659,8 +1768,10 @@ function drawFlag(g,s,P,bob,px,py,S,top){
    BATTLE BOARD
    ===================================================================== */
 const cv=$('#cv'),ctx=cv.getContext('2d');
+const boardView=$('#boardViewport'),boardStage=$('#boardStage');
+let battleZoom=1,boardPan=false,boardTap=null,selectionBox=null;
 let cell=44,dpr=1,bgCanvas=null,terrain=[],SG=null,siteId='plain';
-let pieces=[],selPiece=null,phase='none',B=null,speed=1,battleFoe=null,battleOpts={};
+let pieces=[],selPiece=null,selectedUnits=[],wholeArmy=false,phase='none',B=null,speed=1,battleFoe=null,battleOpts={};
 function distSeg(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy||1;let t=((px-ax)*dx+(py-ay)*dy)/L;t=Math.max(0,Math.min(1,t));return Math.hypot(px-ax-t*dx,py-ay-t*dy);}
 function battleSite(x,y){
   let rd=1e9;for(const pts of RIV_W)for(let i=1;i<pts.length;i++)rd=Math.min(rd,distSeg(x,y,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]));
@@ -1695,12 +1806,47 @@ function passFor(c,r,side,type){if(!inB(c,r))return false;const t=ter(c,r);
   if(t==='w'||t==='D')return false;if(t==='W')return !!SG&&side===SG.def&&(type==='arc'||type==='xbow'||type==='jav'||type==='gun');return true;}
 const isWater=(c,r)=>inB(c,r)&&(ter(c,r)==='w'||ter(c,r)==='b');
 const terAt=(x,y)=>{const c=Math.floor(x),r=Math.floor(y);return inB(c,r)?ter(c,r):'g';};
-function resizeBoard(){
-  const w=$('#wrap').clientWidth-6,hAvail=window.innerHeight*(window.innerWidth<760?.54:.72);
-  cell=Math.max(12,Math.floor(Math.min(w/COLS,hAvail/ROWS,64)));dpr=window.devicePixelRatio||1;
-  cv.width=cell*COLS*dpr;cv.height=cell*ROWS*dpr;cv.style.width=cell*COLS+'px';cv.style.height=cell*ROWS+'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingQuality='high';buildBg();window.FX&&FX.attach(cv,$('#wrap'));
+function sizeBoardPixels(){
+  const oldDecal=decal;
+  dpr=Math.min(4,Math.max(1.5,window.devicePixelRatio||1)*battleZoom);
+  cv.width=Math.round(cell*COLS*dpr);cv.height=Math.round(cell*ROWS*dpr);
+  cv.style.width=cell*COLS+'px';cv.style.height=cell*ROWS+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingQuality='high';
+  if(B&&oldDecal){newDecal();dg.drawImage(oldDecal,0,0,cell*COLS,cell*ROWS);}
+  buildBg();window.FX&&FX.attach(cv,boardStage);
 }
+function resizeBoard(){
+  const w=boardView.clientWidth-4,hAvail=window.innerHeight*(window.innerWidth<760?.54:.72);
+  cell=Math.max(12,Math.floor(Math.min(w/COLS,hAvail/ROWS,64)));
+  boardView.style.height=(cell*ROWS+4)+'px';
+  sizeBoardPixels();
+}
+function refreshZoomButtons(){
+  $('#bZoomOut').disabled=battleZoom===1;$('#bZoomIn').disabled=battleZoom===2.5;
+  $('#bZoomReset').textContent=Math.round(battleZoom*100)+'%';
+}
+function setBattleZoom(value,x,y){
+  const old=cv.getBoundingClientRect();
+  const viewport=boardView.getBoundingClientRect();x??=viewport.left+viewport.width/2;y??=viewport.top+viewport.height/2;
+  const rx=(x-old.left)/old.width,ry=(y-old.top)/old.height;
+  const next=Math.max(1,Math.min(2.5,value));if(next===battleZoom)return;
+  battleZoom=next;boardStage.style.zoom=String(next);sizeBoardPixels();
+  const rect=cv.getBoundingClientRect();
+  boardView.scrollLeft+=rect.left+rx*rect.width-x;boardView.scrollTop+=rect.top+ry*rect.height-y;
+  refreshZoomButtons();
+  if(phase==='deploy'){drawDeploy();window.FX&&FX.dirty();}
+}
+$('#bZoomIn').onclick=()=>setBattleZoom(battleZoom*1.25);
+$('#bZoomOut').onclick=()=>setBattleZoom(battleZoom/1.25);
+$('#bZoomReset').onclick=()=>setBattleZoom(1);
+$('#bPan').onclick=()=>{
+  boardPan=!boardPan;$('#bPan').setAttribute('aria-pressed',boardPan);
+  boardView.classList.toggle('panning',boardPan);
+};
+boardView.addEventListener('wheel',e=>{
+  if(!e.deltaY)return;
+  e.preventDefault();setBattleZoom(battleZoom*(e.deltaY<0?1.15:1/1.15),e.clientX,e.clientY);
+},{passive:false});
 function buildBg(){
   bgCanvas=document.createElement('canvas');bgCanvas.width=cell*COLS*dpr;bgCanvas.height=cell*ROWS*dpr;
   const g=bgCanvas.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const W=cell*COLS,H=cell*ROWS,R=rng(7);
@@ -1810,7 +1956,7 @@ function drawDeploy(){
   }
   const t=performance.now()/1000;
   for(const p of[...pieces].sort((a,b)=>a.r-b.r)){
-    if(p===selPiece){ctx.strokeStyle='#f0cf72';ctx.lineWidth=2.5;ctx.strokeRect(p.c*cell+2,p.r*cell+2,cell-4,cell-4);}
+    if(selectedUnits.includes(p)){ctx.strokeStyle='#f0cf72';ctx.lineWidth=2.5;ctx.strokeRect(p.c*cell+2,p.r*cell+2,cell-4,cell-4);}
     const sl=slotsFor(p),R=rng(p.c*31+p.r*7+1),face=p.side==='blue'?Math.PI:0,pal=SIDE[p.side];
     const men=sl.map((q,i)=>({x:(p.c+.5+q[0])*cell,y:(p.r+.6+q[1])*cell,i,mir:R()<.5?-1:1,skin:Math.floor(R()*4)})).sort((a,b)=>a.y-b.y);
     const bearer=men.reduce((a,b)=>(p.side==='blue'?b.x>a.x:b.x<a.x)?b:a).i;
@@ -1819,6 +1965,10 @@ function drawDeploy(){
     const lbl=p.type==='gen'?'แม่ทัพ':p.type==='off'?(offById(p.oid)||{name:'ขุนพล'}).name:String(p.n);ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.7)';ctx.strokeText(lbl,(p.c+.5)*cell,(p.r+.93)*cell);ctx.fillStyle=p.gar?'#f0d68a':'#fff';ctx.fillText(lbl,(p.c+.5)*cell,(p.r+.93)*cell);
   }
   if(SG)drawGates();
+  if(selectionBox){
+    const {x1,y1,x2,y2}=selectionBox;ctx.fillStyle='rgba(245,211,131,.18)';ctx.fillRect(x1,y1,x2-x1,y2-y1);
+    ctx.strokeStyle='#ffe0a0';ctx.lineWidth=1.5;ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+  }
 }
 const COL_ORDER=[4,5,3,6,2,7,1,8,0,9];
 function autoDeploy(side,groups){
@@ -1872,9 +2022,11 @@ function beginBattle(foe,opts){
   if(foe.fac&&G.rel[foe.fac]!=='war'){G.rel[foe.fac]='war';toast(`ประกาศสงครามกับ${facOf(foe.fac).name}แล้ว`,2600);}
   if(battleOpts.siege){const s=mkSiege(battleOpts.siege.def,battleOpts.siege.kind,battleOpts.siege.wall);terrain=s.t;SG={gates:s.gates,def:s.def,kind:s.kind,wr:s.wr};siteId=battleOpts.site;}
   else{SG=null;siteId=battleOpts.site||'plain';terrain=mkMap(siteId);}
-  show('battleScreen');resizeBoard();
+  show('battleScreen');battleZoom=1;boardPan=false;boardStage.style.zoom='1';
+  boardView.scrollLeft=boardView.scrollTop=0;boardView.classList.remove('panning');
+  $('#bPan').setAttribute('aria-pressed','false');refreshZoomButtons();resizeBoard();
   battlePlan=buildBattlePlan(foe);pieces=[...battlePlan.blue[0],...(battlePlan.red[0]||[])];
-  selPiece=null;phase='deploy';$('#deployBar').hidden=false;$('#fightBar').hidden=true;
+  selPiece=null;selectedUnits=[];wholeArmy=false;selectionBox=null;phase='deploy';$('#deployBar').hidden=false;$('#fightBar').hidden=true;
   $('#battlePhase').textContent='จัดทัพก่อนรบ';$('#battleMode').textContent=trial?'สนามทดสอบ':'แคมเปญ';
   renderBtop();renderDeployRoster();$('#battleScreen').scrollTop=0;
 }
@@ -1888,25 +2040,30 @@ function renderDeployRoster(){
   }));
   selectUnit(null);
 }
-function selectUnit(p,message){
-  selPiece=p;
+function selectUnit(p,message){selectUnits(p?[p]:[],message);}
+function selectUnits(units,message,all=false){
+  selectedUnits=units;wholeArmy=all;selPiece=units.length===1?units[0]:null;
   const mine=pieces.filter(p=>p.side==='blue');
-  Array.from($('#unitList').children).forEach((b,i)=>b.setAttribute('aria-pressed',mine[i]===p));
+  Array.from($('#unitList').children).forEach((b,i)=>b.setAttribute('aria-pressed',units.includes(mine[i])));
   for(const [id,ord] of [['bAttack','atk'],['bHold','hold']]){
-    const b=$('#'+id);b.disabled=!p;b.setAttribute('aria-pressed',p?.ord===ord);
+    const b=$('#'+id);b.disabled=!units.length;b.setAttribute('aria-pressed',!!units.length&&units.every(p=>p.ord===ord));
   }
   document.querySelectorAll('[data-formation]').forEach(b=>{
-    b.disabled=!p||p.n<=1||!!ART[p.type];b.setAttribute('aria-pressed',p?.formation===b.dataset.formation);
+    b.disabled=!selPiece||selPiece.n<=1||!!ART[selPiece.type];b.setAttribute('aria-pressed',selPiece?.formation===b.dataset.formation);
   });
-  $('#deployStatus').textContent=message||(p
-    ?`${deployName(p)} · ${p.ord==='hold'?'ตั้งรับ':'บุก'} · แตะช่องมีจุดเพื่อย้าย หรือแตะอีกกองเพื่อสลับ`
-    :'แตะทหารฝั่งขวาหรือเลือกจากรายชื่อเพื่อสั่งการ');
+  $('#deployStatus').textContent=message||(all?'เลือกทั้งทัพ · คำสั่งจะใช้กับกำลังสำรองด้วย':selPiece
+    ?`${deployName(selPiece)} · ${selPiece.ord==='hold'?'ตั้งรับ':'บุก'} · แตะช่องมีจุดเพื่อย้าย`
+    :units.length?`เลือก ${units.length} กอง · สั่งบุกหรือตั้งรับพร้อมกันได้`:'แตะกองทหาร หรือลากกรอบเพื่อเลือกหลายกอง');
   if(phase==='deploy'){drawDeploy();window.FX&&FX.dirty();}
 }
 function setDeployOrder(ord){
-  if(!selPiece)return;
-  selPiece.ord=ord;selectUnit(selPiece);
+  if(!selectedUnits.length)return;
+  for(const p of selectedUnits)p.ord=ord;
+  if(wholeArmy)for(const wave of battlePlan.blue.slice(1))for(const p of wave)p.ord=ord;
+  const status=`สั่ง${ord==='hold'?'ตั้งรับ':'บุก'} · ${wholeArmy?'ทั้งทัพและกำลังสำรอง':selectedUnits.length+' กอง'}`;
+  selectUnits(selectedUnits,status,wholeArmy);
 }
+$('#bSelectAll').onclick=()=>selectUnits(pieces.filter(p=>p.side==='blue'),null,true);
 document.querySelectorAll('[data-formation]').forEach(b=>b.onclick=()=>{
   if(!selPiece||b.disabled)return;
   selPiece.formation=b.dataset.formation;selectUnit(selPiece,`${deployName(selPiece)} · ${b.textContent.trim()}`);
@@ -1914,17 +2071,39 @@ document.querySelectorAll('[data-formation]').forEach(b=>b.onclick=()=>{
 $('#bAttack').onclick=()=>setDeployOrder('atk');
 $('#bHold').onclick=()=>setDeployOrder('hold');
 $('#bAuto').onclick=()=>{pieces=[...autoDeploy('blue',battlePlan.blue[0].map(p=>p.group)),...pieces.filter(p=>p.side==='red')];renderDeployRoster();selectUnit(null,'จัดทัพใหม่แล้ว · แตะกองทหารเพื่อแก้ตำแหน่ง');};
-let boardTap=null;
+function boardPoint(e){
+  const r=cv.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*COLS*cell/r.width,y:(e.clientY-r.top)*ROWS*cell/r.height};
+}
+function cancelBoardDrag(){boardTap=null;selectionBox=null;}
 cv.addEventListener('pointerdown',e=>{
-  if(phase==='deploy'&&e.isPrimary&&e.button===0)boardTap={id:e.pointerId,x:e.clientX,y:e.clientY};
+  if(!e.isPrimary||e.button!==0)return;
+  cv.setPointerCapture(e.pointerId);
+  boardTap={id:e.pointerId,x:e.clientX,y:e.clientY,origin:boardPoint(e),pan:phase!=='deploy'||boardPan,
+    left:boardView.scrollLeft,top:boardView.scrollTop,moved:false};
 });
-cv.addEventListener('pointercancel',()=>{boardTap=null;});
+cv.addEventListener('pointermove',e=>{
+  if(boardTap?.id!==e.pointerId)return;
+  const dx=e.clientX-boardTap.x,dy=e.clientY-boardTap.y;
+  if(Math.hypot(dx,dy)>7)boardTap.moved=true;
+  if(!boardTap.moved)return;
+  if(boardTap.pan){boardView.scrollLeft=boardTap.left-dx;boardView.scrollTop=boardTap.top-dy;return;}
+  const p=boardPoint(e);
+  selectionBox={x1:Math.min(p.x,boardTap.origin.x),y1:Math.min(p.y,boardTap.origin.y),
+    x2:Math.max(p.x,boardTap.origin.x),y2:Math.max(p.y,boardTap.origin.y)};
+});
+cv.addEventListener('pointercancel',cancelBoardDrag);
+cv.addEventListener('lostpointercapture',cancelBoardDrag);
 cv.addEventListener('pointerup',e=>{
   if(boardTap?.id!==e.pointerId)return;
-  const tap=boardTap;boardTap=null;
-  if(phase!=='deploy'||Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8)return;
-  const rc=cv.getBoundingClientRect();
-  const c=Math.floor((e.clientX-rc.left)*COLS/rc.width),r=Math.floor((e.clientY-rc.top)*ROWS/rc.height);
+  const tap=boardTap,box=selectionBox;cancelBoardDrag();
+  if(phase!=='deploy'||tap.pan)return;
+  if(box){
+    const units=pieces.filter(p=>p.side==='blue'&&(p.c+.5)*cell>=box.x1&&(p.c+.5)*cell<=box.x2&&(p.r+.5)*cell>=box.y1&&(p.r+.5)*cell<=box.y2);
+    selectUnits(units,units.length?null:'กรอบนี้ไม่มีกองทหารฝ่ายเรา',units.length>0&&units.length===pieces.filter(p=>p.side==='blue').length);return;
+  }
+  if(tap.moved)return;
+  const p=boardPoint(e),c=Math.floor(p.x/cell),r=Math.floor(p.y/cell);
   if(!inB(c,r))return;const at=pieces.find(p=>p.c===c&&p.r===r);
   if(at&&at.side==='blue'){
     if(selPiece===at){setDeployOrder(at.ord==='hold'?'atk':'hold');return;}
@@ -2058,6 +2237,7 @@ function startBattle(){
   addBattleGroups(pieces);
   B.startN={blue:B.men.filter(m=>m.side==='blue').length,red:B.men.filter(m=>m.side==='red').length};
   $('#deployBar').hidden=true;$('#fightBar').hidden=false;$('#log').innerHTML='';
+  boardView.classList.add('panning');
   $('#battlePhase').textContent='กำลังรบ';$('#bSkip').disabled=false;$('#bSkip').textContent='ข้ามไปดูผล';$('#battleScreen').scrollTop=0;
   log(SG?(SG.def==='red'?`ตั้งทัพหน้า${battleFoe.name} พังประตูเข้าไป!`:`${battleFoe.name}บุกมาที่กำแพง รักษาประตูไว้!`):`${SIDE.blue.name} ปะทะ ${battleFoe.name}!`);
   banner(SG&&SG.def==='red'?'ตีเมือง!':'เริ่มรบ!');renderBtop();
@@ -2367,12 +2547,15 @@ function allyTown(t){const f=t.own;G.rel[f]='ally';G.gold+=t.s==='k'?500:220;G.a
   t.gar=randomTroops(Math.max(6,Math.round(t.s==='k'?14:8)),['rsp','rsw','hun']);setTimeout(()=>toast(`ลงนามเป็นพันธมิตรกับ${facOf(f).name}แล้ว`,3200),400);}
 function battleResult(){
   phase='result';const foe=battleFoe,won=B.winner==='blue';
+  const commander=B.genDown
+    ?`<p class="commander-report">แม่ทัพบาดเจ็บและออกจากสนาม${won?' · กองทัพที่เหลือยังชนะศึก':''}</p>`:'';
+
   $('#battlePhase').textContent='ผลการรบ';$('#bSkip').disabled=true;
   if(trial){
     if(window.SFX)SFX.amb(false,0,0);
     openSheet(`<h2>${won?'ชนะศึกซ้อม':'ทัพคู่ซ้อมชนะ'}</h2>
       <p>เหลือในสนาม ${aliveCount('blue')} ต่อ ${aliveCount('red')} นาย · สำรอง ${reserveCount(B.reserve.blue)} ต่อ ${reserveCount(B.reserve.red)} นาย</p>
-      <p>ลงสนาม ${B.waves.blue} ต่อ ${B.waves.red} ระลอก</p>
+      <p>ลงสนาม ${B.waves.blue} ต่อ ${B.waves.red} ระลอก</p>${commander}
       <button class="btn gold big" id="rBack" type="button">กลับไปเลือกสนาม</button>`);
     $('#rBack').onclick=()=>{leaveTrial();$('#trialBtn').click();};
     return;
@@ -2424,7 +2607,7 @@ function battleResult(){
       <div class="item"><div class="t"><b>ฝ่ายเรา: ตาย ${dead} · บาดเจ็บ ${wnd}</b><small>รวบรวมกำลังใหม่ จ้างคนเพิ่ม แล้วค่อยกลับไปแก้แค้น</small></div></div>`;
   }
   save();
-  const body=html+(extra||`<button class="btn gold big" id="rBack" type="button">กลับสู่แผนที่</button>`);
+  const body=html+commander+(extra||`<button class="btn gold big" id="rBack" type="button">กลับสู่แผนที่</button>`);
   const bind=()=>{
     const after=fn=>()=>{fn&&fn();closeSheet();backToMap();};
     if($('#rBack'))$('#rBack').onclick=after();
@@ -2465,7 +2648,7 @@ function loop(now){
   }catch(err){console.error(err);}
   requestAnimationFrame(loop);
 }
-window.addEventListener('resize',()=>{if(!$('#mapScreen').hidden)resizeMap();if(!$('#battleScreen').hidden&&phase==='deploy')resizeBoard();});
+window.addEventListener('resize',()=>{if(!$('#mapScreen').hidden)resizeMap();if(!$('#battleScreen').hidden&&phase!=='none')resizeBoard();});
 function saveMapProgress(){if(G&&!$('#mapScreen').hidden)save();}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveMapProgress();});
 window.addEventListener('pagehide',saveMapProgress);
@@ -2484,6 +2667,12 @@ terrainImage.src='./terrain.webp';
 const fieldImage=new Image();
 fieldImage.onload=()=>{fieldArt=fieldImage;if(phase!=='none')buildBg();};
 fieldImage.src='./field.webp';
+const campaignImage=new Image();
+campaignImage.onload=()=>{campaignArt=campaignImage;buildWorld();};
+campaignImage.src='./campaign.webp';
+const settlementImage=new Image();
+settlementImage.onload=()=>{settlementArt=settlementImage;};
+settlementImage.src='./settlements.webp';
 showTitle();
 if(document.fonts)document.fonts.ready.then(()=>{if(!$('#titleScreen').hidden){flagPreview($('#flagPrev'),pickColor,pickEm);drawTitleArt();}});
 requestAnimationFrame(loop);

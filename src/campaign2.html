@@ -195,6 +195,32 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
 .city-project small{color:var(--muted);font-size:11px}
 .city-project .btn,.trade-line .btn{padding-inline:7px}
 #tradeDest{min-height:44px;background:#241e15;color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font:inherit}
+#wrap{display:flex;flex-direction:column;gap:6px}
+.board-tools{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.board-tools .sbtn{min-height:40px}
+.board-tools [aria-pressed=true]{border-color:#e9c677;background:#524223;color:#fbe7b1}
+#boardViewport{position:relative;overflow:auto;overscroll-behavior:contain;border:1px solid #6a5838;border-radius:7px;background:#171911;scrollbar-width:thin}
+#boardStage{width:max-content;position:relative;margin-inline:auto}
+#boardStage #cv{touch-action:none;cursor:crosshair;box-shadow:none}
+#boardViewport.panning #cv{cursor:grab}
+#boardViewport.panning #cv:active{cursor:grabbing}
+#boardViewport #banner{z-index:2}
+.deploy-heading{justify-content:space-between}
+.deploy-heading .btn{min-height:38px;padding:4px 10px}
+.city-layout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;background:#211e16;padding:7px;border:1px solid var(--line);border-radius:9px}
+.city-plot{min-height:52px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;border:1px solid #65553b;border-radius:5px;background:#322d20;color:#d6c6a7;padding:2px}
+.city-plot b{font-size:17px;line-height:1}
+.city-plot.road{min-height:21px;background:#554631;color:#d0b996;font-size:9px}
+.city-plot.working{background:#453526;color:#f6d195;border-style:dashed}
+.city-plot.built{background:#344033;color:#e3ecd6}
+.city-plot.placeable{border-color:#f3ce72;box-shadow:inset 0 0 0 1px #f3ce72;color:#fff2c1}
+.city-build{display:flex;align-items:flex-start;flex-direction:column;text-align:left;gap:2px;touch-action:none;padding:7px 8px;font-size:11px}
+.city-build small{color:var(--muted)}
+.city-build[aria-pressed=true]{border-color:#f3ce72;background:#534124}
+#cityBuildHint{font-size:12px;color:#dfcba3;margin:0}
+.build-queue{margin:0;padding-inline-start:22px;color:#f1c97f;font-size:13px}
+.build-ghost{position:fixed;z-index:99;pointer-events:none;transform:translate(-50%,-118%);background:#382b19;border:1px solid #e9c677;border-radius:6px;color:#ffe8ab;padding:6px 12px}
+.commander-report{border-left:3px solid #dba85f;padding-left:8px;color:#f3ca86}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -247,11 +273,19 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
 <div class="screen" id="battleScreen" hidden>
   <header class="command-head"><h2 id="battlePhase">จัดทัพ</h2><span class="lbl" id="battleMode">สมรภูมิ</span></header>
   <div class="panel btop" id="btop"></div>
-  <div class="boardwrap" id="wrap"><canvas id="cv"></canvas><div id="banner"></div></div>
+  <div class="boardwrap" id="wrap">
+    <div class="board-tools" role="group" aria-label="กล้องสนามรบ">
+      <button class="sbtn" type="button" id="bZoomOut" aria-label="ซูมสนามรบออก">−</button>
+      <button class="sbtn" type="button" id="bZoomReset" aria-label="คืนขนาดสนามรบ">100%</button>
+      <button class="sbtn" type="button" id="bZoomIn" aria-label="ซูมสนามรบเข้า">+</button>
+      <button class="sbtn" type="button" id="bPan" aria-pressed="false">เลื่อนกล้อง</button>
+    </div>
+    <div id="boardViewport"><div id="boardStage"><canvas id="cv"></canvas></div><div id="banner"></div></div>
+  </div>
   <div id="deployBar">
     <div class="panel deploy-panel">
       <p class="deploy-status" id="deployStatus" role="status"></p>
-      <div class="lbl">กองทหารฝ่ายเรา</div>
+      <div class="row deploy-heading"><div class="lbl">กองทหารฝ่ายเรา</div><button class="btn" type="button" id="bSelectAll">เลือกทั้งทัพ</button></div>
       <div class="unit-list" id="unitList" role="group" aria-label="กองทหารฝ่ายเรา"></div>
       <div class="deploy-orders" role="group" aria-label="คำสั่งกองทหาร">
         <button class="btn" id="bAttack" type="button" aria-pressed="false" disabled>บุก</button>
