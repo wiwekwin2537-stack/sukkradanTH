@@ -40,11 +40,11 @@ const MS={
   vil:{hp:19,atk:4.5,spd:.55,cd:1.4,reach:.11,rad:.075},
   spr:{hp:28,atk:8,spd:.6,cd:1.1,reach:.17,rad:.075},
   inf:{hp:32,atk:10,spd:.66,cd:.95,reach:.08,rad:.075},
-  arc:{hp:20,atk:9,spd:.62,cd:1.8,reach:.07,rad:.07,range:6.4},
+  arc:{hp:20,atk:9,spd:.62,cd:1.8,reach:.07,rad:.07,range:5.8},
   xbow:{hp:23,atk:8,spd:.56,cd:3.2,reach:.07,rad:.075,range:5.4},
   jav:{hp:28,atk:9,spd:.68,cd:2.8,reach:.1,rad:.075,range:3.6},
   pike:{hp:29,atk:8,spd:.53,cd:1.2,reach:.39,rad:.075},
-  gun:{hp:24,atk:6,spd:.6,cd:4.2,reach:.07,rad:.07,range:3.7,shot:30},
+  gun:{hp:24,atk:6,spd:.6,cd:3.6,reach:.07,rad:.07,range:5.3,shot:36},
   can:{hp:70,atk:4,spd:.22,cd:7.5,reach:.07,rad:.17,range:7.6,shot:55},
   cav:{hp:65,atk:14,spd:1.5,cd:1.2,reach:.1,rad:.13},
   shd:{hp:48,atk:6,spd:.5,cd:1.15,reach:.08,rad:.085},
@@ -2546,7 +2546,7 @@ function think(m,dt,fast,crowd){
   if(RANGED[m.type]&&(d>.55||onWall||ART[m.type])){const rg=st.range+(terAt(m.x,m.y)==='h'||onWall?1:0);
     if(d<=rg){brake(m,dt);faceTo(m,t,dt);m.fight=true;if(m.cd<=0&&m.aim<0){m.aim=0;m.cd=st.cd*(.85+Math.random()*.3);}return;}
     if(!g.eng||onWall||ART[m.type]){brake(m,dt);return;}
-    if(!steer(m,t.x,t.y,dt,.5))brake(m,dt);return;}
+    if(!steer(m,t.x,t.y,dt,m.type==='gun'?.75:.5))brake(m,dt);return;}
   if(d<=reachOf(m,t)){m.fight=true;brake(m,dt);faceTo(m,t,dt);
     if(m.cd<=0&&m.swing<0){m.swing=0;m.cd=st.cd*(.85+Math.random()*.3);m.pend={t:.17,d:t,charge:MOUNT[m.type]&&m.charge>.45};}return;}
   if(!g.eng){brake(m,dt);return;}
@@ -2564,13 +2564,12 @@ function fireStone(m,fast){const g=m.aimGate,t=m.tgt;if(!g&&(!t||!t.alive))retur
 function muzzle(m,len){return[m.x+Math.cos(m.face)*len,m.y-.28+Math.sin(m.face)*len*.5];}
 function smoke(x,y,n,big){if(!B)return;for(let i=0;i<n&&B.parts.length<900;i++)B.parts.push({k:'smoke',x:x+(Math.random()-.5)*cell*(big?.3:.08),y:y+(Math.random()-.5)*cell*(big?.15:.05),vx:(Math.random()-.5)*.25,vy:-.12-Math.random()*.15,life:1,r:cell*(big?.14:.06)*(1+Math.random()*.6),dec:big?.006:.012});}
 function fireGun(m,fast){const t=m.tgt;if(!t||!t.alive)return;const d=dist(m,t);m.recoil=1;
-  let p=Math.max(.3,.82-d*.1);const tt=terAt(t.x,t.y);if(tt==='f')p*=.7;
+  let p=Math.max(.42,.90-d*.075);const tt=terAt(t.x,t.y);if(tt==='f')p*=.7;
   const hit=Math.random()<p;const mx=muzzle(m,.32);
   const ex=hit?t.x:t.x+(Math.random()-.5)*.6,ey=hit?t.y-.1:t.y+(Math.random()-.5)*.4;
   if(!fast){window.FX&&FX.muzzle(mx[0]*cell,mx[1]*cell,Math.cos(m.face),Math.sin(m.face)*.5);B.fx.push({k:'shot',x0:mx[0],y0:mx[1],x1:ex,y1:ey-.1,t0:performance.now()});smoke(mx[0]*cell,mx[1]*cell,5,false);sfx('gun',mx[0]);
     if(!hit)for(let i=0;i<3;i++)B.parts.push({k:'chip',x:ex*cell,y:ey*cell,z:1,vx:(Math.random()-.5)*1.5,vy:(Math.random()-.5),vz:Math.random()*1.5,life:1});}
-  if(hit){let dmg=MS.gun.shot*m.atkM*(.8+Math.random()*.4)*(t.type==='shd'?.6:1)*(tt==='W'?.55:1);
-    if(Math.random()<.25&&t.type!=='can')dmg=t.hp+1;
+  if(hit){const dmg=MS.gun.shot*m.atkM*(.8+Math.random()*.4)*(t.type==='shd'?.78:1)*(tt==='W'?.55:1);
     hurt(t,dmg,m,{x:Math.sign(t.x-m.x)*.6,y:Math.sign(t.y-m.y)*.6},fast,.12);}}
 function fireCannon(m,fast){const g=m.aimGate,t=m.tgt;if(!g&&(!t||!t.alive))return;
   let tx,ty;if(g){tx=g.c+.5+(Math.random()-.5)*.5;ty=g.r+.55+(Math.random()-.5)*.3;}
@@ -2684,7 +2683,8 @@ function step(dt,fast){
         if(Math.random()<.5)stuckArrow((hit.x+(Math.random()-.5)*.35)*cell,(hit.y+.05+Math.random()*.15)*cell,a.src.type);return false;}
       const tt=terAt(hit.x,hit.y);const mult=(.8+Math.random()*.4)*a.src.atkM*(hit.type==='shd'?.5:1)*(tt==='f'?.5:1)*(tt==='h'?.8:1)*(tt==='W'?.55:1)*(ART[hit.type]?.3:1);
       const glance=Math.random()<(hit.arm||0)*.55;
-      let ad=(a.src.type==='xbow'?24:a.src.type==='jav'?21:16)*mult*(glance?.2:1);if(!glance&&Math.random()<(hit.type==='shd'?.06:MOUNT[hit.type]||ART[hit.type]?.08:.24))ad=hit.hp+1;
+      let ad=(a.src.type==='xbow'?24:a.src.type==='jav'?21:15)*mult*(glance?.2:1);
+      if(a.src.type!=='arc'&&!glance&&Math.random()<(hit.type==='shd'?.06:MOUNT[hit.type]||ART[hit.type]?.08:.24))ad=hit.hp+1;
       if(!glance){hit.arrows++;hit.lastProjectile=a.src.type;}else if(!fast){sparks(hit.x*cell,(hit.y-.3)*cell);stuckArrow((hit.x+(Math.random()-.5)*.4)*cell,(hit.y+.1)*cell,a.src.type);}
       hurt(hit,ad,a.src,{x:Math.sign(a.x1-a.x0)*.3,y:Math.sign(a.y1-a.y0)*.3},fast,0,glance);}
     else if(!fast)stuckArrow(a.x1*cell,a.y1*cell,a.src.type,arrowPose(a,1)[2]);return false;});
