@@ -179,13 +179,16 @@ function fixState(){if(G.x!=null&&!onLand(G.x,G.y))putOnLand(G);for(const p of G
   G.caves??=CAVES.map(([id,n,lon,lat])=>{const [x,y]=toLand(...W2(lon,lat));return{id,n,x,y,clearDay:0};});
   G.towns.forEach(t=>{initTrade(t);if(t.wall==null)t.wall=0;if(t.s==='v'&&(!t.gar||(G.v<3&&!t.gar.length)))t.gar=makeGarrison(t);});
   if(!G.officers)G.officers=[];if(!G.parties)G.parties=[];if(!G.oid)G.oid=1;if(!G.pid)G.pid=1;}
+const RECRUIT_BONUS={houses:{vil:6},barracks:{vil:18,rsp:4,rsw:3}};
+function addRecruitStock(t,id,n){if(n)t.stock[id]=(t.stock[id]||0)+n;}
 function restock(t){
   if(t.s==='v')t.stock={vil:ri(3,7)};
   if(t.s==='c')t.stock={vil:ri(2,4),rsp:ri(1,3),rsw:ri(1,3),hun:ri(1,3)};
   if(t.s==='k')t.stock={rsw:ri(1,3),spr:ri(1,3),swd:ri(1,3),shd:ri(0,2),arc:ri(1,3),gun:ri(1,3),lcv:ri(0,2),can:ri(0,1),cat:ri(0,1)};
   const specialty=SPECIAL[t.own]||SPECIAL[TOWN_OWNER[t.n]];
   if(t.s!=='v'&&specialty)t.stock[specialty]=ri(4,10);
-  if(t.barracks)t.stock.vil=(t.stock.vil||0)+t.barracks*18;
+  for(const [id,count] of Object.entries(RECRUIT_BONUS))
+    for(const [troop,n] of Object.entries(count))addRecruitStock(t,troop,n*(t[id]||0));
   if(t.s!=='v')t.hero=Math.random()<.4?makeOfficer(Math.min(6,ri(1,2)+Math.floor((G?G.day:0)/14))):null;
   t.rs=G?G.day:0;
 }
@@ -240,7 +243,7 @@ function spawnArmy(fac){
 const mcv=$('#mapCv'),mctx=mcv.getContext('2d');
 let worldBg=null,zoom=1.8,cam={x:0,y:0},camFree=false,mdpr=1;
 let terrCv=null,terrDirty=true,landMask=null,TS=4;
-let terrainAtlas=null,fieldArt=null,campaignArt=null,settlementArt=null;
+let terrainAtlas=null,fieldArt=null,campaignArt=null,settlementArt=null,fieldProps=null;
 const terrainTiles=new Map(),materialOffsets={grass:[0,0],dirt:[1,0],forest:[0,1],water:[1,1]};
 function paintMaterial(g,material,x,y,w,h,size,alpha){
   if(!terrainAtlas)return;
@@ -717,14 +720,16 @@ function resolveAway(a,t){
    ===================================================================== */
 const sheetOpen=()=>!$('#sheet').hidden;
 let sheetFocus=null;
-function openSheet(html){
+function openSheet(html,wide=false){
   const fresh=!sheetOpen(),box=$('#sheetBox');
+  const changed=box.classList.contains('city-sheet')!==wide;
+  box.classList.toggle('city-sheet',wide);
   if(fresh){
     sheetFocus=document.activeElement;
     document.querySelectorAll('.screen').forEach(screen=>screen.inert=true);
   }
   box.innerHTML=html;$('#sheet').hidden=false;
-  if(fresh)box.scrollTop=0;
+  if(fresh||changed)box.scrollTop=0;
   box.focus({preventScroll:true});
 }
 function closeSheet(){
@@ -770,9 +775,9 @@ function townShop(t,hostile,own){
       item(`ฝึกหนัก 3 วัน · ขั้น ${lv}/5`,lv>=5?'ทหารสาย'+DRILL_N[sc]+'ของเราเก่งที่สุดแล้ว':`ทหารสาย${DRILL_N[sc]}ทั้งทัพแข็งแกร่งขึ้นถาวร (โจมตีและความทน +6%) และได้ประสบการณ์ · ${cost} ทอง`,lv<5?B('drill','ฝึก',G.gold<cost):'')+'</div>';}
   if(k!=='v'){const cost=150*(G.gen.tr+1),can=G.gen.tr<G.gen.lv;
     h+=item('แม่ทัพฝึกวิชา 2 วัน',can?`ได้แต้มสเตตัส +1 · ${cost} ทอง`:'ฝึกได้อีกเมื่อแม่ทัพเลื่อนขั้น',can?B('gtrain','ฝึก',G.gold<cost):'');}
-  if(own==='p'&&k!=='v'){const w=t.wall,nx=w+1;
+  if(own==='p'&&k!=='v'){const w=t.wall;
     h+=`<div class="sec">ป้องกันเมือง</div><div class="list">`+
-      item(`กำแพงและประตู ขั้น ${w}/3`,nx>3?'แข็งแรงที่สุดแล้ว':`ประตูทนขึ้น ทหารเฝ้าเมืองตั้งรับเก่งขึ้น · ${WALLC[nx]} ทอง`,nx<=3?B('wall','เสริม',G.gold<WALLC[nx]):'')+
+      item(`กำแพงและประตู ขั้น ${w}/3`,'พัฒนากำแพงในผังเมือง','<button class="btn" id="cityShortcut" type="button">เปิดผังเมือง</button>')+
       item('เกณฑ์ชาวเมืองเฝ้าเมือง','ทหารอาสา 5 คน ไม่ต้องจ่ายเงินเดือน · 40 ทอง',B('militia','เกณฑ์',G.gold<40))+'</div>';}
   return h;
 }
@@ -788,12 +793,12 @@ function bindShop(t){
     if(a==='drill'){const sc=SCHOOL[t.n],lv=G.drill[sc]||0,c=120*(lv+1);if(G.gold<c)return toast('ทองไม่พอ');G.gold-=c;G.drill[sc]=lv+1;
       for(const e of G.army)if(drillKey(TROOPS[e.id].type)===sc)e.xp+=25*(e.n-e.w);passDays(3);return done(`ฝึกหนักครบ 3 วัน ทหารสาย${DRILL_N[sc]}เป็นขั้น ${lv+1}!`);}
     if(a==='gtrain'){const c=150*(G.gen.tr+1);if(G.gold<c)return toast('ทองไม่พอ');G.gold-=c;G.gen.tr++;G.gen.pts++;passDays(2);return done('แม่ทัพฝึกวิชาสำเร็จ ได้แต้มสเตตัส +1');}
-    if(a==='wall'){const nx=t.wall+1;if(G.gold<WALLC[nx])return toast('ทองไม่พอ');G.gold-=WALLC[nx];t.wall=nx;return done(`เสริมกำแพง${t.n}เป็นขั้น ${nx}`);}
     if(a==='militia'){if(G.gold<40)return toast('ทองไม่พอ');G.gold-=40;addTo(t.gar,'vil',5);return done('เกณฑ์ชาวเมือง 5 คนเฝ้าเมือง');}
   });
 }
 function openTown(t,tab='overview'){
   const own=ownerOf(t),F=facOf(own),rel=relOf(own),fort=t.s!=='v';
+  if(tab==='develop'&&t.own==='p'&&fort){openCityWorkshop(t);return;}
   const hostile=rel==='war'||(t.raidedUntil||0)>G.day;const disc=(rel==='own'||rel==='ally')?.8:1;
   const rows=hostile?`<p class="muted" style="margin:0">ชาวเมืองไม่ยอมให้ศัตรูของ${F.short}จ้างคน</p>`:(Object.entries(t.stock).filter(([,n])=>n>0).map(([id,n])=>{const T=TROOPS[id],pr=Math.round(T.price*disc);
     const hireBlock=armyCount()>=limit()?'กองทัพเต็ม':G.gold<pr?'ทองไม่พอ':'';
@@ -815,7 +820,7 @@ function openTown(t,tab='overview'){
     <div class="town-scene" role="img" aria-label="ภาพเมืองสยามริมแม่น้ำ"><span>${TOWN_KIND[t.s]} · ทรัพยากร ${GOODS[t.resource].name}</span></div>
     <div class="muted" style="font-size:13.5px">ทอง ${G.gold} · ทหาร ${armyCount()}/${limit()} นาย</div>
     <div class="town-tabs" aria-label="หน้าจัดการเมือง">${[['overview','เมืองและกองทัพ'],['trade','คลังและค้า'],...(own==='p'&&fort?[['develop','สร้างเมือง']]:[])].map(([id,label])=>`<button class="btn" type="button" data-town-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</div>
-    ${tab==='trade'?tradePanel(t,hostile):tab==='develop'?cityProjects(t):`
+    ${tab==='trade'?tradePanel(t,hostile):`
     ${t.s==='v'&&own!=='p'&&rel!=='ally'?`<div class="item"><div class="t"><b>ชาวบ้านพร้อมป้องกัน ${total(t.gar)} คน</b><small>${t.raidedUntil>G.day?`กำลังฟื้นตัวถึงวันที่ ${t.raidedUntil}`:'ต้องชนะการรบจึงจะปล้นได้'}</small></div>
       <button class="btn red" id="raidTown" type="button"${t.raidedUntil>G.day?' disabled':''}>บุกปล้น</button></div>`:''}
     ${fortHtml}${mineHtml}
@@ -830,7 +835,7 @@ function openTown(t,tab='overview'){
   const tp=$('#townPic').getContext('2d');tp.scale(2,2);drawTownAt(tp,t,50,44,1.5,false);
   document.querySelectorAll('[data-town-tab]').forEach(b=>b.onclick=()=>openTown(t,b.dataset.townTab));
   if(tab==='trade')bindTrade(t,hostile);
-  if(tab==='develop')bindCityProjects(t);
+  if($('#cityShortcut'))$('#cityShortcut').onclick=()=>openCityWorkshop(t);
   document.querySelectorAll('[data-icon]').forEach(c=>troopIcon(c,c.dataset.icon));bindShop(t);
   const patrol=$('#townPatrol');if(patrol)patrol.onclick=()=>{
     const point=[[42,0],[-42,0],[0,42],[0,-42]].map(([x,y])=>[t.x+x,t.y+y]).find(([x,y])=>segClear(t.x,t.y,x,y));
@@ -1112,35 +1117,48 @@ function openCave(cave){
   };
 }
 
-const PROJECTS={market:{name:'ตลาด',mark:'▤',cost:180,good:'wood',n:8,days:2,desc:'+30 ทองต่อวัน'},
-  farms:{name:'ไร่นา',mark:'▥',cost:140,good:'rice',n:8,days:2,desc:'+12 เสบียงต่อวัน'},
-  barracks:{name:'โรงทหาร',mark:'⚑',cost:220,good:'stone',n:8,days:3,desc:'+70 ความจุทัพ'},
-  keep:{name:'เมืองป้อม',mark:'♜',cost:800,good:'stone',n:25,food:120,days:5,desc:'ยกค่ายเป็นเมืองป้อม'}};
+const PROJECTS={
+  houses:{name:'บ้านชาวเมือง',mark:'⌂',sprite:0,cost:110,good:'wood',n:6,days:2,desc:'ชาวบ้านให้จ้าง +6 ต่อขั้น'},
+  market:{name:'ตลาด',mark:'▤',sprite:1,cost:180,good:'wood',n:8,days:2,desc:'+30 ทองต่อวัน'},
+  farms:{name:'ไร่นา',mark:'▥',sprite:2,cost:140,good:'rice',n:8,days:2,desc:'+12 เสบียงต่อวัน'},
+  barracks:{name:'โรงฝึกทหาร',mark:'⚑',sprite:3,cost:220,good:'stone',n:8,days:3,desc:'เพิ่มทหารเกณฑ์หอกและดาบให้จ้าง และความจุทัพ +70 ต่อขั้น'},
+  wall:{name:'กำแพงและประตู',mark:'▦',sprite:4,good:'stone',n:12,days:3,desc:'เพิ่มความทนของประตูและกำลังตั้งรับ'},
+  keep:{name:'เมืองป้อม',mark:'♜',sprite:5,cost:800,good:'stone',n:25,food:120,days:5,desc:'ยกค่ายเป็นเมืองป้อม'}
+};
 const CITY_TILES=Array.from({length:15},(_,i)=>i);
-const CITY_ROAD=new Set([5,6,7,8,9]);
+const CITY_ROAD=new Set([5,6,7,8,9]),CITY_EDGES=[14,10,13,11,12,0,4];
 function initCityLayout(t){
   t.layout??=Object.fromEntries([['market',1],['farms',10],['barracks',3]].filter(([id])=>t[id]>0).map(([id,i])=>[i,id]));
   t.buildQueue??=[];
+  if(t.wall>0&&!Object.values(t.layout).includes('wall')&&!t.buildQueue.some(j=>j.id==='wall')){
+    const tile=CITY_EDGES.find(i=>!t.layout[i]&&!t.buildQueue.some(j=>j.tile===i));
+    if(tile!==undefined)t.layout[tile]='wall';
+  }
 }
 function projectStatus(t,id){
   const p=PROJECTS[id],lv=id==='keep'?0:t[id]||0;
-  const cost=p.cost*(lv+1),n=p.n*(lv+1),days=p.days+lv;
+  const cost=id==='wall'?(WALLC[lv+1]||0):p.cost*(lv+1),n=p.n*(lv+1),days=p.days+lv;
+  const missing=[
+    [cost-G.gold,'ทอง'],[n-(t.goods[p.good]||0),GOODS[p.good].name],[(p.food||0)-G.food,'เสบียง']
+  ].filter(([qty])=>qty>0).map(([qty,name])=>name+' '+qty);
   const reason=t.buildQueue.some(j=>j.id===id)?'กำลังก่อสร้าง'
-    :lv>=3?'เต็มขั้น':id==='keep'&&(t.s!=='c'||!t.founded||!['market','farms','barracks'].every(k=>t[k]>0))?'ต้องสร้างอาคารหลักทั้งสาม'
-    :G.gold<cost?'ทองไม่พอ':t.goods[p.good]<n?'วัสดุไม่พอ':G.food<(p.food||0)?'เสบียงไม่พอ':'';
+    :(id==='keep'||id==='wall')&&t.buildQueue.some(j=>j.id==='keep'||j.id==='wall')?'รอการเสริมป้อมให้เสร็จ'
+    :lv>=3?'เต็มขั้น':id==='keep'&&(t.s!=='c'||!t.founded||!['market','farms','barracks'].every(k=>t[k]>0))?'ต้องสร้างตลาด ไร่นา และโรงฝึก'
+    :missing.length?'ขาด '+missing.join(' · '):'';
   return {p,lv,cost,n,days,reason};
 }
 function validBuildTile(t,id,tile){
   if(!CITY_TILES.includes(tile)||CITY_ROAD.has(tile)||t.buildQueue.some(job=>job.tile===tile))return false;
   const existing=Object.keys(t.layout).find(i=>t.layout[i]===id);
-  return existing===undefined?!t.layout[tile]:+existing===tile;
+  if(existing!==undefined)return +existing===tile;
+  return !t.layout[tile]&&(id!=='wall'||CITY_EDGES.includes(tile));
 }
 function queueProject(t,id,tile){
-  if(t.own!=='p'||!PROJECTS[id]||!validBuildTile(t,id,tile))return false;
+  if(t.own!=='p'||t.s==='v'||!PROJECTS[id]||!validBuildTile(t,id,tile))return false;
   const {p,cost,n,days,reason}=projectStatus(t,id);
   if(reason)return false;
   G.gold-=cost;t.goods[p.good]-=n;G.food-=p.food||0;
-  t.buildQueue.push({id,tile,finish:G.day+days});
+  t.buildQueue.push({id,tile,start:G.day,finish:G.day+days});
   save();return true;
 }
 function finishCityProjects(){
@@ -1150,33 +1168,54 @@ function finishCityProjects(){
       if(job.finish>G.day)return true;
       t.layout[job.tile]=job.id;
       if(job.id==='keep'){t.s='k';t.wall=Math.max(1,t.wall);restock(t);}
-      else t[job.id]=(t[job.id]||0)+1;
+      else{
+        t[job.id]=Math.min(3,(t[job.id]||0)+1);
+        for(const [troop,n] of Object.entries(RECRUIT_BONUS[job.id]||{}))addRecruitStock(t,troop,n);
+      }
       terrDirty=true;
       return false;
     });
   }
 }
-function cityProjects(t){
-  if(t.own!=='p'||t.s==='v')return '';
+function citySprite(id){
+  const p=PROJECTS[id];
+  return `<span class="city-sprite city-sprite-${p.sprite}" aria-hidden="true">${p.mark}</span>`;
+}
+function openCityWorkshop(t){
   initCityLayout(t);
-  const cards=Object.entries(PROJECTS).filter(([id])=>id!=='keep'||t.founded&&t.s==='c').map(([id])=>{
+  const cards=Object.keys(PROJECTS).filter(id=>id!=='keep'||t.founded&&t.s==='c').map(id=>{
     const {p,lv,cost,n,days,reason}=projectStatus(t,id);
-    return `<button class="btn city-build" type="button" data-project="${id}" aria-pressed="false"${reason?' disabled':''}>
-      <b>${p.mark} ${p.name}${id==='keep'?'':` · ${lv}/3`}</b><small>${p.desc}</small>
-      <small>${cost} ทอง + ${GOODS[p.good].name} ${n}${p.food?` + เสบียง ${p.food}`:''}</small>
-      <small>${reason||`${days} วัน`}</small></button>`;
+    return `<button class="city-build" type="button" data-project="${id}" aria-pressed="false" title="${p.desc}"${reason?' disabled':''}>
+      ${citySprite(id)}<span><b>${p.name}${id==='keep'?'':` · ${lv}/3`}</b>
+      ${lv<3?`<small>${cost} ทอง · ${GOODS[p.good].name} ${n}${p.food?` · เสบียง ${p.food}`:''}</small>`:''}
+      <small class="${reason?'build-block':''}">${reason||`${days} วัน · พร้อมวาง`}</small></span></button>`;
   }).join('');
   const plots=CITY_TILES.map(i=>{
-    if(CITY_ROAD.has(i))return '<span class="city-plot road" aria-hidden="true">ทางเดิน</span>';
+    if(CITY_ROAD.has(i))return '<span class="city-road" aria-hidden="true"></span>';
     const job=t.buildQueue.find(x=>x.tile===i),id=job?.id||t.layout[i],p=PROJECTS[id];
+    const label=job?`เหลือ ${job.finish-G.day} วัน`:p?p.name:'';
     return `<button class="city-plot ${job?'working':p?'built':''}" type="button" data-city-tile="${i}"
-      aria-label="${p?p.name:'พื้นที่ว่าง'} ช่อง ${i+1}"><b>${p?p.mark:'＋'}</b><span>${job?`อีก ${job.finish-G.day} วัน`:p?p.name:'พื้นที่ว่าง'}</span></button>`;
+      aria-label="${p?p.name:'พื้นที่ว่าง'} ช่อง ${i+1}${job?' · '+label:''}">
+      ${p?citySprite(id):'<i aria-hidden="true">+</i>'}${label?`<span class="city-plot-label">${label}</span>`:''}</button>`;
   }).join('');
-  const queue=t.buildQueue.map(job=>`<li>${PROJECTS[job.id].name} · กำลังก่อสร้าง · เหลือ ${job.finish-G.day} วัน</li>`).join('');
-  return `<div class="sec">ผังสร้างเมือง</div><p id="cityBuildHint" role="status">ลากแบบอาคารมาวางบนพื้นที่ว่าง หรือแตะแบบแล้วแตะช่อง</p>
-    <div class="city-layout" role="group" aria-label="ผังเมือง">${plots}</div><div class="city-projects">${cards}</div>
-    <div class="sec">คิวก่อสร้าง · วันที่ ${G.day}</div>${queue?`<ul class="build-queue">${queue}</ul>`:'<small>ยังไม่มีอาคารกำลังก่อสร้าง</small>'}
-    <button class="btn" type="button" id="buildWait">รอ 1 วัน · คิดค่าจ้างและเสบียงตามปกติ</button>`;
+  const queue=t.buildQueue.map(job=>`<li>${PROJECTS[job.id].name} · เหลือ ${job.finish-G.day} วัน${job.start!=null?`<progress aria-label="ความคืบหน้า ${PROJECTS[job.id].name}" value="${G.day-job.start}" max="${job.finish-job.start}"></progress>`:''}</li>`).join('');
+  const resources=Object.entries(GOODS).map(([id,g])=>`<span>${g.name} <b>${t.goods[id]}</b></span>`).join('');
+  openSheet(`<header class="city-head"><div><small>วางผังและก่อสร้าง · วันที่ ${G.day}</small><h2>${t.n}</h2></div>
+    <button class="btn" id="cityTrade" type="button">คลังและค้า</button>
+    <button class="btn" id="cityTroops" type="button">ทหารเฝ้าเมือง ${total(t.gar)}</button>
+    <button class="btn" id="cityExit" type="button">กลับแผนที่</button></header>
+    <div class="city-resources" aria-label="ทรัพยากรก่อสร้าง"><span>ทอง <b>${G.gold}</b></span>${resources}<span>เสบียง <b>${G.food}</b></span></div>
+    <div class="city-workspace">
+      <div class="city-layout" role="group" aria-label="สนามก่อสร้าง">${plots}</div>
+      <aside class="city-sidebar" aria-label="แถบก่อสร้าง"><h3>แถบก่อสร้าง</h3><div class="city-projects">${cards}</div></aside>
+    </div>
+    <p id="cityBuildHint" role="status">ลากแบบอาคารลงฉาก หรือแตะแบบแล้วแตะช่อง</p>
+    <footer class="city-footer"><div><h3>คิวก่อสร้าง</h3>${queue?`<ul class="build-queue">${queue}</ul>`:'<small>ยังไม่มีอาคารกำลังก่อสร้าง</small>'}</div>
+      <button class="btn" type="button" id="buildWait">รอ 1 วัน</button></footer>`,true);
+  $('#cityTrade').onclick=()=>openTown(t,'trade');
+  $('#cityTroops').onclick=()=>openTown(t);
+  $('#cityExit').onclick=closeSheet;
+  bindCityProjects(t);
 }
 function bindCityProjects(t){
   const cards=[...document.querySelectorAll('[data-project]')],tiles=[...document.querySelectorAll('[data-city-tile]')],hint=$('#cityBuildHint');
@@ -1186,12 +1225,12 @@ function bindCityProjects(t){
     selected=id;
     cards.forEach(b=>b.setAttribute('aria-pressed',b.dataset.project===id));
     tiles.forEach(b=>b.classList.toggle('placeable',validBuildTile(t,id,+b.dataset.cityTile)));
-    hint.textContent=`เลือก ${PROJECTS[id].name} · วางในช่องที่มีกรอบทอง`;
+    hint.textContent=`${PROJECTS[id].name} · ${PROJECTS[id].desc} · ${id==='wall'?'วางตามแนวขอบเมือง':'วางในช่องกรอบทอง'}`;
   };
   const place=tile=>{
     if(!selected)return;
     if(!queueProject(t,selected,tile)){hint.textContent='วางที่นี่ไม่ได้ · เลือกช่องที่มีกรอบทอง';return;}
-    openTown(t,'develop');
+    openCityWorkshop(t);
   };
   const cancel=()=>{if(drag?.ghost)drag.ghost.remove();drag=null;};
   for(const b of cards){
@@ -1205,7 +1244,7 @@ function bindCityProjects(t){
     b.addEventListener('pointermove',e=>{
       if(drag?.id!==e.pointerId)return;
       if(!drag.ghost&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7){
-        const g=document.createElement('span');g.className='build-ghost';g.textContent=PROJECTS[id].name;
+        const g=document.createElement('span');g.className='build-ghost';g.innerHTML=citySprite(id);
         document.body.appendChild(g);drag.ghost=g;
       }
       if(drag.ghost){drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';}
@@ -1218,8 +1257,13 @@ function bindCityProjects(t){
     b.addEventListener('pointercancel',cancel);
     b.addEventListener('lostpointercapture',cancel);
   }
-  tiles.forEach(b=>b.onclick=()=>place(+b.dataset.cityTile));
-  $('#buildWait').onclick=()=>{dailyTick();openTown(t,'develop');};
+  tiles.forEach(b=>b.onclick=()=>{
+    const tile=+b.dataset.cityTile;
+    if(selected){place(tile);return;}
+    const id=t.layout[tile];
+    if(id&&cards.some(card=>card.dataset.project===id&&!card.disabled))select(id);
+  });
+  $('#buildWait').onclick=()=>{dailyTick();openCityWorkshop(t);};
 }
 function tradePanel(t,hostile){
   const mine=ownerOf(t)==='p',route=G.caravans.find(c=>c.from===t.n&&c.kind!=='patrol'),report=t.lastShipment;
@@ -1847,6 +1891,10 @@ boardView.addEventListener('wheel',e=>{
   if(!e.deltaY)return;
   e.preventDefault();setBattleZoom(battleZoom*(e.deltaY<0?1.15:1/1.15),e.clientX,e.clientY);
 },{passive:false});
+function drawFieldProp(g,index,x,y,size){
+  const sw=fieldProps.width/2,sh=fieldProps.height/2;
+  g.drawImage(fieldProps,(index%2)*sw,Math.floor(index/2)*sh,sw,sh,x-size/2,y-size*.89,size,size);
+}
 function buildBg(){
   bgCanvas=document.createElement('canvas');bgCanvas.width=cell*COLS*dpr;bgCanvas.height=cell*ROWS*dpr;
   const g=bgCanvas.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const W=cell*COLS,H=cell*ROWS,R=rng(7);
@@ -1867,6 +1915,11 @@ function buildBg(){
       ridge.addColorStop(0,'rgba(234,202,139,.78)');ridge.addColorStop(.51,'rgba(132,108,67,.42)');
       ridge.addColorStop(.78,'rgba(40,28,16,.52)');ridge.addColorStop(1,'rgba(40,28,16,0)');
       g.fillStyle=ridge;g.fillRect(x,y,cell,cell);
+      if(fieldProps){
+        const variant=(c+r)%2;
+        drawFieldProp(g,2+variant,x+cell*.42,y+cell*.65,cell*.61);
+        if(variant)drawFieldProp(g,3,x+cell*.73,y+cell*.78,cell*.34);
+      }
     }}
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(isWater(c,r)){g.fillStyle='#c2b17a';g.fillRect(c*cell-2,r*cell-3,cell+4,cell+6);}
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const x=c*cell,y=r*cell,t=ter(c,r);
@@ -1889,6 +1942,13 @@ function buildBg(){
     g.save();g.beginPath();g.ellipse(x+cell*.5,y+cell*.5,cell*.54,cell*.42,-.25,0,7);g.clip();
     paintMaterial(g,'forest',x-cell*.1,y-cell*.1,cell*1.2,cell*1.2,90,.9);g.restore();
     const trees=[];for(let i=0;i<9;i++)trees.push([x+cell*(.15+R()*.7),y+cell*(.15+R()*.75)]);trees.sort((a,b)=>a[1]-b[1]);
+    if(fieldProps){
+      for(let i=0;i<trees.length;i++){
+        const [tx,ty]=trees[i],size=cell*(.32+R()*.13);
+        if(i%2===0)drawFieldProp(g,i%4===0?0:1,tx,ty,size);
+      }
+      continue;
+    }
     for(const[tx,ty]of trees){const s=cell*(.11+R()*.06);g.fillStyle='rgba(0,0,0,.3)';g.beginPath();g.ellipse(tx+s*.3,ty+s*.9,s,s*.45,0,0,7);g.fill();
       g.fillStyle='#5a3d20';g.fillRect(tx-1,ty,2,s*.8);g.fillStyle='#22461f';g.beginPath();g.arc(tx,ty-s*.2,s,0,7);g.fill();g.fillStyle='#356b2c';g.beginPath();g.arc(tx-s*.3,ty-s*.5,s*.6,0,7);g.fill();}}
   if(siteId==='village'||SG){
@@ -2667,6 +2727,9 @@ terrainImage.src='./terrain.webp';
 const fieldImage=new Image();
 fieldImage.onload=()=>{fieldArt=fieldImage;if(phase!=='none')buildBg();};
 fieldImage.src='./field.webp';
+const fieldPropsImage=new Image();
+fieldPropsImage.onload=()=>{fieldProps=fieldPropsImage;if(phase!=='none')buildBg();};
+fieldPropsImage.src='./field-props.webp';
 const campaignImage=new Image();
 campaignImage.onload=()=>{campaignArt=campaignImage;buildWorld();};
 campaignImage.src='./campaign.webp';

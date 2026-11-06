@@ -15,6 +15,8 @@ const routes = new Map([
   ['/field.webp', asset('field.webp', 'image/webp')],
   ['/campaign.webp', asset('campaign.webp', 'image/webp')],
   ['/settlements.webp', asset('settlements.webp', 'image/webp')],
+  ['/field-props.webp', asset('field-props.webp', 'image/webp')],
+  ['/buildings.webp', asset('buildings.webp', 'image/webp')],
   ['/healthz', { body: Buffer.from('ok\n'), type: 'text/plain; charset=utf-8' }],
 ]);
 
