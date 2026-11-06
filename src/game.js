@@ -150,8 +150,8 @@ function newGame(name,color,emblem){
   setPlayerColors();fixState();
   G.towns.forEach(restock);staticLinks();initWorld();
   G.towns[0].hero=makeOfficer(1);
-  for(let i=0;i<3;i++)spawnBandit(x,y,70,150,ri(3,5));
-  for(let i=0;i<8;i++)spawnBandit();
+  for(let i=0;i<5;i++)spawnBandit(x,y,70,170,ri(3,6));
+  for(let i=0;i<12;i++)spawnBandit();
   terrDirty=true;save();
 }
 function upgradeSave(){if(!G.v){staticLinks();initWorld();}staticLinks();fixState();terrDirty=true;}
@@ -396,7 +396,7 @@ function speedOf(list,cavExtra,footExtra){let foot=footExtra||0,cav=cavExtra||0;
   for(const e of list){const n=e.n-(e.w||0);if(TROOPS[e.id].type==='cav')cav+=n;else foot+=n;}
   const tot=Math.max(1,foot+cav);return (38+cav/tot*20)/(1+tot/90);}
 const pSpeed=()=>speedOf(G.army,1,prisCount()*.5);
-const partySpeed=o=>speedOf(o.troops,0,0)*(o.fleeing?.9:1);
+const partySpeed=o=>speedOf(o.troops,0,0)*(o.fleeing?.72:1);
 /* coarse land grid for routing around the sea */
 const NS=10;let nav=null,NW=0,NH=0;
 function buildNav(){NW=Math.ceil(WORLD_W/NS);NH=Math.ceil(WORLD_H/NS);nav=new Uint8Array(NW*NH);
@@ -445,7 +445,7 @@ function mapStep(dt){
   for(const b of G.bandits){
     const bS=strength(b.troops,0),d=Math.hypot(G.x-b.x,G.y-b.y);b.cool-=dt;
     if(b.cool<=0&&d<150&&bS>=pS*.8){b.tx=G.x;b.ty=G.y;b.chase=(b.chase||0)+dt;if(b.chase>5){b.cool=12;b.chase=0;}}
-    else if(d<120&&pS>bS*1.8){b.fleeing=true;const a=Math.atan2(b.y-G.y,b.x-G.x);b.tx=b.x+Math.cos(a)*60;b.ty=b.y+Math.sin(a)*60;}
+    else if(d<90&&pS>bS*3){b.fleeing=true;const a=Math.atan2(b.y-G.y,b.x-G.x);b.tx=b.x+Math.cos(a)*60;b.ty=b.y+Math.sin(a)*60;}
     else{b.fleeing=false;const tp=b.cool<=0&&G.parties.find(p=>Math.hypot(p.x-b.x,p.y-b.y)<110&&bS>=partyS(p)*.8);if(tp){b.tx=tp.x;b.ty=tp.y;}else wander(b,80);}
     moveParty(b,dt);
     if(b.cool<=0&&Math.hypot(G.x-b.x,G.y-b.y)<15){const mine=G.tgt&&G.tgt.k==='b'&&G.tgt.id===b.id;G.tx=null;G.tgt=null;waiting=0;encounter(b,'b',!mine);return;}
@@ -532,7 +532,9 @@ function dailyTick(){
       const t=targets.slice().sort((p,q)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(q.x-a.x,q.y-a.y))[0];
       a.mission=G.towns.indexOf(t);msgs.push(`<b>${a.name}</b> ยกทัพ ${total(a.troops)} นาย มุ่งหน้าตี<b>${t.n}</b>!`);}}
   }
-  const want=Math.min(16,8+Math.floor(G.day/8));while(G.bandits.length<want){const before=G.bandits.length;spawnBandit();if(G.bandits.length===before)break;}
+  const want=Math.min(30,14+Math.floor(G.day/4));while(G.bandits.length<want){const before=G.bandits.length;spawnBandit();if(G.bandits.length===before)break;}
+  // always keep some prey within a day or two's ride of the general
+  const near=G.bandits.filter(b=>Math.hypot(b.x-G.x,b.y-G.y)<220).length;if(near<5&&G.bandits.length<40)for(let i=ri(1,2);i>0;i--)spawnBandit(G.x,G.y,90,220);
   if(msgs.length)toast(msgs.join('<br>'),3800);
   renderHud();save();
 }
