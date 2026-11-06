@@ -1,0 +1,183 @@
+<title>ศึกกระดาน</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*FONTS*/
+/* layout: phone-first campaign in black lacquer and gold leaf — title art, map with stat ribbon and dock, scroll-like bottom sheets, battle board */
+:root{
+  --lac:#100d0a; --lac2:#1a1510; --lac3:#241d15; --line:rgba(217,178,92,.28); --line2:rgba(217,178,92,.55);
+  --ink:#f1e8d2; --muted:#a89a7c; --gold:#d9b25c; --gold2:#f4d98f; --gold3:#9c7a33; --cinnabar:#b5402c;
+  --good:#9fd47a; --bad:#ef6a52; --warn:#eab04a;
+  --display:"Chakra Petch","Sarabun","Leelawadee UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans Thai","Sarabun","Leelawadee UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;background:var(--lac);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.5;margin:0;box-sizing:border-box;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;
+  background-color:var(--lac);
+  background-image:radial-gradient(ellipse at 50% -10%,rgba(181,64,44,.18),transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M14 2l12 12-12 12L2 14z' fill='none' stroke='%23d9b25c' stroke-opacity='.06'/%3E%3Ccircle cx='14' cy='14' r='1.4' fill='%23d9b25c' fill-opacity='.08'/%3E%3C/svg%3E");}
+.screen{max-width:560px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:8px;min-height:0}
+h1{font-family:var(--display);font-weight:700;margin:0;line-height:1}
+h2{font-family:var(--display);margin:0;font-size:22px;color:var(--gold2);text-wrap:balance;letter-spacing:.01em}
+.num{font-variant-numeric:tabular-nums;font-family:var(--display);font-weight:600}
+.muted{color:var(--muted)}
+button{font:inherit;color:var(--ink);cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.ic{width:18px;height:18px;flex:none;fill:currentColor}
+/* panels and buttons */
+.panel{background:linear-gradient(180deg,var(--lac3),var(--lac2));border:1px solid var(--line);border-radius:12px;box-shadow:inset 0 1px 0 rgba(244,217,143,.08),0 8px 24px rgba(0,0,0,.45)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);
+  background:linear-gradient(180deg,#2a2219,#1a1510);font-size:14.5px;box-shadow:inset 0 1px 0 rgba(244,217,143,.08)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.gold{background:linear-gradient(180deg,#f6dc95 0%,#d9b25c 45%,#a8822e 100%);color:#2a1b06;border:1px solid #f6dc95;font-weight:700;font-family:var(--display);
+  box-shadow:0 3px 0 #6a4f17,0 6px 16px rgba(217,178,92,.25),inset 0 1px 0 rgba(255,255,255,.5);text-shadow:0 1px 0 rgba(255,240,200,.5)}
+.btn.big{padding:14px;font-size:19px;letter-spacing:.02em}
+.btn.red{background:linear-gradient(180deg,#c9523b,#8e2a1f);border-color:#e07a62;font-weight:600}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+/* title */
+#titleScreen{gap:12px;overflow:auto;padding-bottom:8px}
+.hero{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line2);box-shadow:0 10px 30px rgba(0,0,0,.6);flex:none}
+.hero canvas{display:block;width:100%;height:auto}
+.hero .ttl{position:absolute;left:0;right:0;top:9%;text-align:center}
+.hero h1{font-size:46px;letter-spacing:.04em;background:linear-gradient(180deg,#fff3c9,#e7c06a 55%,#a8782a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 3px 0 #2a1a08) drop-shadow(0 0 18px rgba(0,0,0,.6))}
+.hero .tag{color:#f4e3bb;font-size:13px;letter-spacing:.18em;text-shadow:0 1px 6px #000;margin-top:6px}
+.lead{color:var(--muted);margin:0;text-align:center;font-size:14px}
+.tcard{padding:16px;display:flex;flex-direction:column;gap:10px}
+.lbl{font-family:var(--display);font-size:12.5px;letter-spacing:.12em;color:var(--gold)}
+input[type=text]{background:#0c0a08;border:1px solid var(--line);border-radius:9px;padding:11px 12px;color:var(--ink);font:inherit;font-size:16px;width:100%;box-sizing:border-box}
+.sw{display:flex;gap:10px;flex-wrap:wrap}
+.sw button{width:40px;height:40px;border-radius:50%;border:2px solid rgba(0,0,0,.6);box-shadow:0 0 0 2px transparent;transition:box-shadow .15s}
+.sw button.on{box-shadow:0 0 0 3px var(--gold2)}
+.em{display:flex;gap:6px;flex-wrap:wrap}
+.em button{padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:#0c0a08;font-size:13.5px}
+.em button.on{background:var(--gold);color:#1a1408;border-color:var(--gold2);font-weight:600}
+.flagrow{display:flex;align-items:center;gap:12px}
+.flagrow canvas{width:84px;height:56px;flex:none}
+/* map */
+.hud{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px}
+.stat{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:8px;background:rgba(0,0,0,.28);min-width:0}
+.stat .ic{color:var(--gold);width:17px;height:17px}
+.stat b{font-family:var(--display);font-weight:700;font-variant-numeric:tabular-nums;font-size:15px;white-space:nowrap}
+.stat span{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mapwrap{position:relative;flex:1;min-height:0;border-radius:14px;overflow:hidden;border:1px solid var(--line2);box-shadow:0 0 0 4px #0a0806,0 0 0 5px var(--gold3),0 12px 30px rgba(0,0,0,.6)}
+#mapCv{display:block;width:100%;height:100%;touch-action:none}
+.zoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line2);background:rgba(16,13,10,.85);font-size:22px;font-family:var(--display);color:var(--gold2);backdrop-filter:blur(4px)}
+.dock{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:6px;padding:6px}
+.dock button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:10px;border:1px solid transparent;background:transparent;font-size:13px;color:var(--ink)}
+.dock button .ic{width:22px;height:22px;color:var(--gold)}
+.dock button:active{background:rgba(217,178,92,.12);border-color:var(--line)}
+#toast{position:fixed;left:0;right:0;margin:0 auto;width:max-content;top:14%;background:linear-gradient(180deg,#2a2219,#14100c);border:1px solid var(--line2);color:var(--ink);padding:10px 16px;border-radius:12px;font-size:14px;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;text-align:center;max-width:86%;z-index:40;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+#toast.on{opacity:1}
+/* sheet */
+#sheet{position:fixed;inset:0;background:rgba(5,4,3,.62);z-index:30;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+.sheetbox{position:relative;background:linear-gradient(180deg,#221b14,#15110d 30%,#110e0b);border:1px solid var(--line2);border-bottom:none;border-radius:20px 20px 0 0;width:100%;max-width:560px;max-height:85%;overflow:auto;
+  padding:22px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-sizing:border-box;display:flex;flex-direction:column;gap:12px;
+  box-shadow:0 -12px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(244,217,143,.15)}
+.sheetbox::before{content:"";position:absolute;top:8px;left:50%;width:44px;height:4px;margin-left:-22px;border-radius:2px;background:var(--gold3)}
+@keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
+.list{display:flex;flex-direction:column;gap:7px}
+.item{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(0,0,0,.15));border:1px solid var(--line);border-radius:12px;padding:10px 11px;display:flex;gap:10px;align-items:center}
+.item .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.item .t b{font-weight:600}
+.item small{color:var(--muted);font-size:12.5px}
+.item canvas{flex:none;width:42px;height:46px;background:radial-gradient(circle at 50% 70%,rgba(217,178,92,.15),transparent 70%);border-radius:8px}
+.item .btn{padding:7px 11px;font-size:13px}
+.stars{color:var(--gold2);letter-spacing:1px;font-size:11px}
+.xpbar{height:6px;border-radius:3px;background:#0a0806;overflow:hidden;margin-top:4px;box-shadow:inset 0 0 0 1px rgba(217,178,92,.15)}
+.xpbar i{display:block;height:100%;background:linear-gradient(90deg,#a8822e,#f4d98f)}
+.ups{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.ups .btn{padding:6px 10px;font-size:12.5px;border-color:var(--gold3)}
+.sec{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:600;color:var(--gold);font-size:12.5px;letter-spacing:.14em;margin-top:4px}
+.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
+.vs .side{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:10px 8px;min-width:0}
+.vs>b{font-family:var(--display);color:var(--cinnabar);font-size:15px}
+.chip{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;box-shadow:0 0 0 1px #0008}
+/* battle */
+#battleScreen{overflow:auto}
+.btop{padding:9px 12px;display:flex;flex-direction:column;gap:6px}
+.btop .rowx{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+.who{font-family:var(--display);font-weight:700;font-size:15px}
+.meter{height:8px;border-radius:4px;background:#0a0806;overflow:hidden;display:flex;box-shadow:inset 0 0 0 1px rgba(217,178,92,.18)}
+.meter i{display:block;height:100%;transition:width .3s}
+.boardwrap{position:relative;display:flex;justify-content:center;flex:none}
+#fxView{border-radius:6px;box-shadow:0 0 0 3px #0a0806,0 0 0 4px var(--gold3),0 12px 30px rgba(0,0,0,.6)}
+canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0 0 0 3px #0a0806,0 0 0 4px var(--gold3),0 12px 30px rgba(0,0,0,.6)}
+#banner{position:absolute;left:0;right:0;top:44%;text-align:center;font-family:var(--display);font-weight:700;font-size:30px;color:var(--gold2);text-shadow:0 3px 0 #2a1a08,0 0 20px rgba(0,0,0,.8);pointer-events:none;opacity:0;transition:opacity .4s,transform .4s;transform:scale(.9);letter-spacing:.06em}
+#banner.on{opacity:1;transform:none}
+.ctrl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sbtn{padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:#14100c;font-size:14px;font-family:var(--display)}
+.sbtn.on{background:var(--gold);color:#1a1408;border-color:var(--gold2);font-weight:700}
+.log{padding:8px 12px;font-size:13px;min-height:60px;display:flex;flex-direction:column;gap:2px}
+.log div{opacity:.5}.log div:last-child{opacity:1;color:var(--gold2)}
+.hint{color:var(--muted);font-size:12.5px;text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-day" viewBox="0 0 24 24"><path d="M12 3a1 1 0 011 1v1.1a7 7 0 016 6.9 7 7 0 01-14 0 7 7 0 016-6.9V4a1 1 0 011-1zm0 4a5 5 0 100 10 5 5 0 000-10zm0 2l1.2 3H16l-2.4 1.8.9 3L12 15l-2.5 1.8.9-3L8 12h2.8z"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><path d="M12 3c-4.4 0-8 1.6-8 3.5v11C4 19.4 7.6 21 12 21s8-1.6 8-3.5v-11C20 4.6 16.4 3 12 3zm0 2c3.6 0 6 1.2 6 1.5S15.6 8 12 8 6 6.8 6 6.5 8.4 5 12 5zm6 12.5c0 .3-2.4 1.5-6 1.5s-6-1.2-6-1.5v-2.2c1.4.8 3.6 1.2 6 1.2s4.6-.4 6-1.2zm0-4.5c0 .3-2.4 1.5-6 1.5S6 13.3 6 13v-2.2c1.4.8 3.6 1.2 6 1.2s4.6-.4 6-1.2zm0-4.5c0 .3-2.4 1.5-6 1.5S6 8.8 6 8.5V8.3c1.4.8 3.6 1.2 6 1.2s4.6-.4 6-1.2z"/></symbol>
+  <symbol id="i-helm" viewBox="0 0 24 24"><path d="M12 2l1.5 3.2C17.7 6 20 9.3 20 13v3l-2 1v3h-3v-4h-2v4h-2v-4H9v4H6v-3l-2-1v-3c0-3.7 2.3-7 6.5-7.8zM9 11v2h6v-2z"/></symbol>
+  <symbol id="i-castle" viewBox="0 0 24 24"><path d="M3 21V9h2V6h2v3h2V5h2v4h2V5h2v4h2V6h2v3h2v12h-7v-5a2 2 0 00-4 0v5z"/></symbol>
+  <symbol id="i-chain" viewBox="0 0 24 24"><path d="M8.5 7a4.5 4.5 0 000 9H10v-2H8.5a2.5 2.5 0 010-5H12a2.5 2.5 0 012.4 1.8l1.9-.6A4.5 4.5 0 0012 7zm7 1H14v2h1.5a2.5 2.5 0 010 5H12a2.5 2.5 0 01-2.4-1.8l-1.9.6A4.5 4.5 0 0012 17h3.5a4.5 4.5 0 000-9z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z"/></symbol>
+  <symbol id="i-army" viewBox="0 0 24 24"><path d="M5 3l2 3v6l-2 2v6h2v-5l2-2 2 2v5h2v-6l-2-2V6l2-3zM16 3v9.3l-1.5 1.7V21h2v-5l1.5-1.5L19.5 16v5h2v-7l-1.5-1.7V3l-2 2z"/></symbol>
+  <symbol id="i-tent" viewBox="0 0 24 24"><path d="M12 3l1 1.6L22 19v2H2v-2l9-14.4zm0 4.3L5.3 19H9l3-5 3 5h3.7z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zm2 4v2h10V8zm0 4v2h10v-2zm0 4v1h6v-1z"/></symbol>
+</svg>
+
+<div class="screen" id="titleScreen">
+  <div class="hero"><canvas id="titleArt" width="1120" height="640"></canvas>
+    <div class="ttl"><h1>ศึกกระดาน</h1><div class="tag">ตำนานขุนศึกแห่งสยาม</div></div></div>
+  <p class="lead">เริ่มจากแม่ทัพตัวคนเดียว จ้างชาวบ้าน ปราบโจร ตีเมือง แล้วรวมแผ่นดินให้เป็นหนึ่ง</p>
+  <div class="panel tcard">
+    <label class="lbl" for="genName">ชื่อแม่ทัพ</label>
+    <input type="text" id="genName" maxlength="16" value="ขุนศึก">
+    <div class="lbl">สีธง</div>
+    <div class="sw" id="swatches"></div>
+    <div class="lbl">ลายธง</div>
+    <div class="flagrow"><canvas id="flagPrev" width="180" height="120"></canvas><div class="em" id="emblems"></div></div>
+    <button class="btn gold big" id="startNew" type="button">เริ่มการเดินทาง</button>
+  </div>
+  <button class="btn big" id="contBtn" type="button" hidden>เล่นต่อจากที่บันทึกไว้</button>
+</div>
+
+<div class="screen" id="mapScreen" hidden>
+  <div class="panel hud" id="hud"></div>
+  <div class="mapwrap" id="mapWrap">
+    <canvas id="mapCv"></canvas>
+    <div class="zoom"><button type="button" id="zIn" aria-label="ซูมเข้า">+</button><button type="button" id="zOut" aria-label="ซูมออก">−</button></div>
+  </div>
+  <div class="panel dock">
+    <button id="bArmy" type="button"><svg class="ic"><use href="#i-army"/></svg>กองทัพ</button>
+    <button id="bWait" type="button"><svg class="ic"><use href="#i-tent"/></svg>ตั้งค่ายพัก</button>
+    <button id="bMenu" type="button"><svg class="ic"><use href="#i-menu"/></svg>เมนู</button>
+  </div>
+</div>
+
+<div class="screen" id="battleScreen" hidden>
+  <div class="panel btop" id="btop"></div>
+  <div class="boardwrap" id="wrap"><canvas id="cv"></canvas><div id="banner"></div></div>
+  <div id="deployBar" style="display:flex;flex-direction:column;gap:8px">
+    <div class="hint">แตะกองทหารเพื่อเลือก แล้วแตะช่องอื่นเพื่อย้าย · แตะกองเดิมซ้ำเพื่อสลับ บุก/ตั้งรับ (ธงทอง)</div>
+    <div class="row"><button class="btn grow" id="bAuto" type="button">จัดทัพอัตโนมัติ</button><button class="btn gold big grow" id="bFight" type="button">เริ่มรบ!</button></div>
+  </div>
+  <div id="fightBar" hidden style="display:flex;flex-direction:column;gap:8px">
+    <div class="ctrl"><span class="muted" style="font-size:13px">ความเร็ว</span>
+      <button class="sbtn on" data-sp="1" type="button">×1</button><button class="sbtn" data-sp="2" type="button">×2</button><button class="sbtn" data-sp="4" type="button">×4</button>
+      <button class="sbtn" id="bSkip" type="button">ข้าม</button><button class="sbtn on" id="bSound" type="button">เสียง</button></div>
+    <div class="panel log" id="log"></div>
+  </div>
+</div>
+
+<div id="sheet" hidden><div class="sheetbox" id="sheetBox"></div></div>
+<div id="toast"></div>
+
+<!--LIBS-->
+<script src="game.js"></script>
+<script src="fx.js"></script>
