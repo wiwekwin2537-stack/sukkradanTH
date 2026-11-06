@@ -122,6 +122,70 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
 .log div{opacity:.5}.log div:last-child{opacity:1;color:var(--gold2)}
 .hint{color:var(--muted);font-size:12.5px;text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Command screens */
+body{padding-inline:max(10px,env(safe-area-inset-left,0px)) max(10px,env(safe-area-inset-right,0px));padding-block:max(8px,env(safe-area-inset-top,0px)) max(8px,env(safe-area-inset-bottom,0px))}
+.screen{max-width:800px;gap:10px}
+.panel{background:linear-gradient(155deg,#27251d,#141715 75%);border-color:#635337}
+.btn,.sbtn,.dock button,.zoom button,.em button,.sw button{min-height:44px;touch-action:manipulation}
+.btn:not(.gold):not(.red),.sbtn:not(.on){border-color:#776446;background:linear-gradient(#353125,#211f19)}
+.btn:not(:disabled):hover,.sbtn:not(:disabled):hover,.dock button:hover,.zoom button:not(:disabled):hover{border-color:var(--gold2);filter:brightness(1.15)}
+button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
+.btn:disabled{box-shadow:none}
+.title-menu{display:flex;flex-direction:column;gap:8px}
+.title-menu .tcard{padding:12px;gap:7px}
+.title-menu .row{gap:6px}
+.title-menu #contBtn,.title-menu #trialBtn{width:100%}
+.mode-btn{display:flex;justify-content:space-between;gap:10px;text-align:left}
+.mode-btn small{font-size:11px;color:var(--muted)}
+.hero .tag{letter-spacing:.1em}
+.command-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 3px}
+.command-head h2{font-size:19px;line-height:1.2}
+.command-head .lbl{color:#d3b671;text-align:right;letter-spacing:.06em}
+.map-order{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;color:#f3e5c4;min-height:19px}
+.map-order::before{content:"";width:7px;height:7px;flex:none;border-radius:50%;background:#d6b670}
+.zoom button{width:44px}
+.zoom button:last-child{font-size:17px}
+.dock{grid-template-columns:repeat(3,1fr)}
+.dock button{background:linear-gradient(#332c20,#211e18);border-color:#5a4b34}
+.sheetbox{max-height:calc(92% - env(safe-area-inset-top,0px));overscroll-behavior:contain}
+.sheetbox .item button{min-height:44px}
+.sheetbox .town-heading{position:sticky;top:-22px;z-index:1;margin:-8px -5px 0;padding:7px 5px;background:#1e1b15;border-bottom:1px solid var(--line)}
+#tExitTop{padding-inline:10px;flex:none}
+#battleScreen{max-width:1030px;scrollbar-width:thin}
+#wrap{max-width:100%;min-width:0}
+#btop{flex:none}
+#deployBar,#fightBar{display:flex;flex-direction:column;gap:8px}
+.deploy-panel{padding:8px;display:flex;flex-direction:column;gap:7px}
+.deploy-status{margin:0;color:#f2e4c5;font-size:13px;min-height:2.8em}
+.deploy-orders{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.deploy-orders [aria-pressed="true"],.unit-list [aria-pressed="true"]{color:#fbe7b1;background:#524223;border-color:#e9c677;box-shadow:inset 0 -2px #dcb76a}
+.unit-list{display:flex;gap:6px;overflow:auto;padding:1px 1px 4px;scrollbar-width:thin}
+.unit-list .btn{flex:none;font-size:12px;padding:5px 9px}
+#bSkip{margin-left:auto}
+#bFight{flex:1.3}
+#bLeaveTrial{align-self:center}
+@media (min-width:760px){
+  #titleScreen{max-width:1060px;display:grid;grid-template-columns:1.45fr 1fr;grid-template-rows:auto auto;align-content:center;align-items:start;gap:10px 20px;overflow:visible}
+  #titleScreen .lead{grid-column:1;grid-row:2}
+  #titleScreen .title-menu{grid-column:2;grid-row:1 / span 2}
+  #battleScreen{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(235px,1fr);grid-template-rows:auto auto auto;align-content:start;align-items:start;gap:10px 14px}
+  #battleScreen .command-head,#btop{grid-column:1 / -1}
+  #wrap{grid-column:1;grid-row:3 / span 3}
+  #deployBar,#fightBar,#bLeaveTrial{grid-column:2}
+  .unit-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:190px;overflow-y:auto}
+  .unit-list .btn{white-space:normal}
+}
+@media (max-width:420px){
+  .hero canvas{height:clamp(134px,44vw,185px);object-fit:cover}
+  .hero h1{font-size:36px}
+  .hud{gap:4px;padding:5px}
+  .stat{gap:4px;padding:3px 4px}
+  .stat .ic{width:14px;height:14px}
+  .stat b{font-size:13px}
+  .stat span{font-size:10px}
+  .command-head h2{font-size:16px}
+}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -140,7 +204,11 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
   <div class="hero"><canvas id="titleArt" width="1120" height="640"></canvas>
     <div class="ttl"><h1>ศึกกระดาน</h1><div class="tag">ตำนานขุนศึกแห่งสยาม</div></div></div>
   <p class="lead">เริ่มจากแม่ทัพตัวคนเดียว จ้างชาวบ้าน ปราบโจร ตีเมือง แล้วรวมแผ่นดินให้เป็นหนึ่ง</p>
-  <div class="panel tcard">
+  <div class="title-menu">
+    <button class="btn gold big" id="contBtn" type="button" hidden>เล่นแคมเปญต่อ</button>
+    <button class="btn mode-btn" id="trialBtn" type="button"><strong>ทดลองสนามรบ</strong><small>จัดทัพแล้วรบได้ทันที</small></button>
+    <div class="panel tcard">
+    <h2>เริ่มแคมเปญ</h2>
     <label class="lbl" for="genName">ชื่อแม่ทัพ</label>
     <input type="text" id="genName" maxlength="16" value="ขุนศึก">
     <div class="lbl">สีธง</div>
@@ -148,17 +216,18 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
     <div class="lbl">ลายธง</div>
     <div class="flagrow"><canvas id="flagPrev" width="180" height="120"></canvas><div class="em" id="emblems"></div></div>
     <button class="btn gold big" id="startNew" type="button">เริ่มการเดินทาง</button>
+    </div>
   </div>
-  <div class="panel tcard field-preview"><small>สนามทดสอบ · ลองจัดทัพและดูการรบได้ทันที</small><button class="btn" id="trialBtn" type="button">ทดลองสนามรบ</button></div>
-  <button class="btn big" id="contBtn" type="button" hidden>เล่นต่อจากที่บันทึกไว้</button>
 </div>
 
 <div class="screen" id="mapScreen" hidden>
+  <header class="command-head"><h2>แผนที่สยาม</h2><span class="lbl">แคมเปญ</span></header>
   <div class="panel hud" id="hud"></div>
   <div class="mapwrap" id="mapWrap">
     <canvas id="mapCv"></canvas>
-    <div class="zoom"><button type="button" id="zIn" aria-label="ซูมเข้า">+</button><button type="button" id="zOut" aria-label="ซูมออก">−</button></div>
+    <div class="zoom"><button type="button" id="zIn" aria-label="ซูมเข้า">+</button><button type="button" id="zOut" aria-label="ซูมออก">−</button><button type="button" id="zHome" aria-label="กลับไปหาแม่ทัพ" title="กลับไปหาแม่ทัพ">◎</button></div>
   </div>
+  <div class="panel map-order" id="mapOrder" role="status">แตะพื้นที่หรือเมืองเพื่อเดินทัพ · ลากเพื่อเลื่อนแผนที่</div>
   <div class="panel dock">
     <button id="bArmy" type="button"><svg class="ic"><use href="#i-army"/></svg>กองทัพ</button>
     <button id="bWait" type="button"><svg class="ic"><use href="#i-tent"/></svg>ตั้งค่ายพัก</button>
@@ -167,23 +236,32 @@ canvas#cv{display:block;touch-action:manipulation;border-radius:6px;box-shadow:0
 </div>
 
 <div class="screen" id="battleScreen" hidden>
+  <header class="command-head"><h2 id="battlePhase">จัดทัพ</h2><span class="lbl" id="battleMode">สมรภูมิ</span></header>
   <div class="panel btop" id="btop"></div>
   <div class="boardwrap" id="wrap"><canvas id="cv"></canvas><div id="banner"></div></div>
-  <div id="deployBar" style="display:flex;flex-direction:column;gap:8px">
-    <div class="hint">แตะกองทหารเพื่อเลือก แล้วแตะช่องอื่นเพื่อย้าย · แตะกองเดิมซ้ำเพื่อสลับ บุก/ตั้งรับ (ธงทอง)</div>
+  <div id="deployBar">
+    <div class="panel deploy-panel">
+      <p class="deploy-status" id="deployStatus" role="status"></p>
+      <div class="lbl">กองทหารฝ่ายเรา</div>
+      <div class="unit-list" id="unitList" role="group" aria-label="กองทหารฝ่ายเรา"></div>
+      <div class="deploy-orders" role="group" aria-label="คำสั่งกองทหาร">
+        <button class="btn" id="bAttack" type="button" aria-pressed="false" disabled>บุก</button>
+        <button class="btn" id="bHold" type="button" aria-pressed="false" disabled>ตั้งรับ</button>
+      </div>
+    </div>
     <div class="row"><button class="btn grow" id="bAuto" type="button">จัดทัพอัตโนมัติ</button><button class="btn gold big grow" id="bFight" type="button">เริ่มรบ!</button></div>
   </div>
-  <div id="fightBar" hidden style="display:flex;flex-direction:column;gap:8px">
+  <div id="fightBar" hidden>
     <div class="ctrl"><span class="muted" style="font-size:13px">ความเร็ว</span>
-      <button class="sbtn on" data-sp="1" type="button">×1</button><button class="sbtn" data-sp="2" type="button">×2</button><button class="sbtn" data-sp="4" type="button">×4</button>
-      <button class="sbtn" id="bSkip" type="button">ข้าม</button><button class="sbtn on" id="bSound" type="button">เสียง</button></div>
+      <button class="sbtn on" data-sp="1" aria-pressed="true" type="button">×1</button><button class="sbtn" data-sp="2" aria-pressed="false" type="button">×2</button><button class="sbtn" data-sp="4" aria-pressed="false" type="button">×4</button>
+      <button class="sbtn" id="bSkip" type="button">ข้ามไปดูผล</button><button class="sbtn on" id="bSound" type="button" aria-pressed="true">เสียงเปิด</button></div>
     <div class="panel log" id="log"></div>
   </div>
   <button class="btn" id="bLeaveTrial" type="button" hidden>ออกจากสนามทดสอบ</button>
 </div>
 
-<div id="sheet" hidden><div class="sheetbox" id="sheetBox"></div></div>
-<div id="toast"></div>
+<div id="sheet" hidden><div class="sheetbox" id="sheetBox" role="dialog" aria-modal="true" aria-label="หน้าต่างคำสั่ง" tabindex="-1"></div></div>
+<div id="toast" role="status"></div>
 
 <!--LIBS-->
 <script src="game.js"></script>
