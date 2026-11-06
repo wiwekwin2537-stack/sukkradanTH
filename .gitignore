@@ -3,3 +3,4 @@ android/build/
 android/app/build/
 android/app/src/main/assets/index.html
 *.apk
+node_modules/

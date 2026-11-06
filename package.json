@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:web": "node tools/build-web.cjs",
+    "check": "node --check src/game.js && node --check server.js && node --check tools/build-web.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
   }
 }

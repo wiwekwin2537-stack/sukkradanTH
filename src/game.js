@@ -2,7 +2,7 @@
 /* =====================================================================
    DATA
    ===================================================================== */
-const COLS=16, ROWS=10, DEPLOY=4, BLUE_EDGE=COLS-DEPLOY, WAVE_SIZE=72;   // battlefield runs left (enemy) to right (us)
+const COLS=16, ROWS=10, DEPLOY=4, BLUE_EDGE=COLS-DEPLOY, WAVE_SIZE=72, DAY_SECONDS=20;   // battlefield runs left (enemy) to right (us)
 const TROOPS={
   pike:{n:'พลหอกยาว',type:'pike',tier:3,hp:1.02,atk:1.06,wage:4,price:140,up:[]},
   xbow:{n:'พลหน้าไม้',type:'xbow',tier:3,hp:1,atk:1.08,wage:4,price:145,up:[]},
@@ -25,7 +25,7 @@ const TROOPS={
   gun4:{n:'ทหารปืนคาบศิลาเอก',type:'gun',tier:4,hp:1.25,atk:1.3,wage:8,up:[]},
   can:{n:'ปืนใหญ่',type:'can',tier:4,hp:1,atk:1,wage:12,price:450,up:[],pow:7},
   cat:{n:'เครื่องยิงหิน',type:'cat',tier:4,hp:1,atk:1,wage:10,price:380,up:[],pow:6},
-  b1:{n:'โจรกระจอก',type:'vil',tier:1,hp:.75,atk:.65,bandit:1,join:'vil'},
+  b1:{n:'โจรกระจอก',type:'vil',tier:1,hp:1.03,atk:.97,bandit:1,join:'vil'},
   b2:{n:'โจรดาบ',type:'inf',tier:2,hp:.9,atk:.85,bandit:1,join:'rsw'},
   b3:{n:'โจรธนู',type:'arc',tier:2,hp:.85,atk:.85,bandit:1,join:'hun'},
   b5:{n:'โจรทวน',type:'spr',tier:2,hp:.9,atk:.85,bandit:1,join:'rsp'},
@@ -37,7 +37,7 @@ const TPOW={1:1,2:1.8,3:3,4:4.6};
 const RANSOM={1:12,2:24,3:40,4:60};
 const TAX={v:4,c:10,k:25};
 const MS={
-  vil:{hp:30,atk:9,spd:.62,cd:1.15,reach:.14,rad:.075},
+  vil:{hp:19,atk:4.5,spd:.55,cd:1.4,reach:.11,rad:.075},
   spr:{hp:28,atk:8,spd:.6,cd:1.1,reach:.17,rad:.075},
   inf:{hp:32,atk:10,spd:.66,cd:.95,reach:.08,rad:.075},
   arc:{hp:20,atk:9,spd:.62,cd:1.8,reach:.07,rad:.07,range:6.4},
@@ -100,6 +100,7 @@ const TOWNS=[
   ['บ้านตรัง',99.61,7.56,'v'],['บ้านปัตตานี',101.25,6.87,'v'],['บ้านแพร่',100.14,18.14,'v'],['บ้านเชียงราย',99.83,19.91,'v'],['บ้านแม่ฮ่องสอน',97.97,19.3,'v']
 ];
 const W2=(lon,lat)=>[(lon-97)*120,(20.9-lat)*120];
+const CAVES=[['north','ถ้ำผาแดง',98.82,19.4],['west','ถ้ำหุบหมอก',98.92,16.1],['east','ถ้ำดงพญาไฟ',101.52,15.35],['south','ถ้ำเขาเกลือ',99.05,10.65]];
 const WORLD_W=1080,WORLD_H=1860;
 const POLY=THAI.map(p=>W2(p[0],p[1]));
 const RIV_W=RIVERS.map(rv=>rv.map(p=>W2(p[0],p[1])));
@@ -174,7 +175,9 @@ function newGame(name,color,emblem){
 function upgradeSave(){if(!G.v){staticLinks();initWorld();}staticLinks();fixState();G.v=3;terrDirty=true;}
 function fixState(){if(G.x!=null&&!onLand(G.x,G.y))putOnLand(G);for(const p of G.parties||[])if(!onLand(p.x,p.y))putOnLand(p);const g=G.gen;if(!g.st)g.st={str:0,end:0,lead:0};if(g.pts==null)g.pts=(g.lv-1)*2;if(g.tr==null)g.tr=0;
   if(G.food==null)G.food=30;if(G.herb==null)G.herb=0;if(!G.eq)G.eq={arm:0,wpn:0};if(!G.gear)G.gear={wpn:0,arm:0,horse:0};if(!G.drill)G.drill={};
-  G.towns.forEach(t=>{if(t.wall==null)t.wall=0;if(t.s==='v'&&(!t.gar||(G.v<3&&!t.gar.length)))t.gar=makeGarrison(t);});
+  G.goods??={};G.caravans??=[];G.nextConvoy??=1;
+  G.caves??=CAVES.map(([id,n,lon,lat])=>{const [x,y]=toLand(...W2(lon,lat));return{id,n,x,y,clearDay:0};});
+  G.towns.forEach(t=>{initTrade(t);if(t.wall==null)t.wall=0;if(t.s==='v'&&(!t.gar||(G.v<3&&!t.gar.length)))t.gar=makeGarrison(t);});
   if(!G.officers)G.officers=[];if(!G.parties)G.parties=[];if(!G.oid)G.oid=1;if(!G.pid)G.pid=1;}
 function restock(t){
   if(t.s==='v')t.stock={vil:ri(3,7)};
@@ -214,10 +217,12 @@ function spawnBandit(cx,cy,rmin,rmax,size){
   while(tries<300&&(!onLand(x,y)||G.towns.some(t=>Math.hypot(t.x-x,t.y-y)<40)||Math.hypot(G.x-x,G.y-y)<70));
   if(tries>=300)return;
   const lvl=G.gen.lv;
-  const n=size||Math.max(3,Math.round(rnd(3,7)+G.day*.25+lvl*1.5+Math.random()*lvl*3));
+  const mountain=size==null&&mtnP(20.9-y/120,97+x/120)>=.5;
+  const n=size||Math.max(3,Math.round(rnd(3,7)+G.day*.25+lvl*1.5+Math.random()*lvl*3+(mountain?4:0)));
   const troops={};const late=Math.min(.55,G.day/80+lvl*.04);
   for(let i=0;i<n;i++){const r=Math.random();const id=r<.62-late?'b1':r<.78-late*.4?'b2':r<.9-late*.2?'b3':r<.96?'b5':'b4';troops[id]=(troops[id]||0)+1;}
-  const name=n<8?'โจรกระจอก':n<16?'ซ่องโจร':n<28?'ชุมโจรใหญ่':'กองทัพโจร';
+  if(mountain){troops.b5=(troops.b5||0)+2;troops.b3=(troops.b3||0)+2;}
+  const name=mountain?'โจรภูเขา':n<8?'โจรกระจอก':n<16?'ซ่องโจร':n<28?'ชุมโจรใหญ่':'กองทัพโจร';
   G.bandits.push({id:G.bid++,name,x,y,hx:x,hy:y,tx:x,ty:y,cool:0,troops:Object.entries(troops).map(([id,n])=>({id,n,w:0}))});
 }
 function spawnArmy(fac){
@@ -235,7 +240,7 @@ function spawnArmy(fac){
 const mcv=$('#mapCv'),mctx=mcv.getContext('2d');
 let worldBg=null,zoom=1.8,cam={x:0,y:0},camFree=false,mdpr=1;
 let terrCv=null,terrDirty=true,landMask=null,TS=4;
-let terrainAtlas=null;
+let terrainAtlas=null,fieldArt=null;
 const terrainTiles=new Map(),materialOffsets={grass:[0,0],dirt:[1,0],forest:[0,1],water:[1,1]};
 function paintMaterial(g,material,x,y,w,h,size,alpha){
   if(!terrainAtlas)return;
@@ -376,8 +381,11 @@ function drawMap(){
   const sc=worldBg.width/WORLD_W;const[x0,y0]=s2w(0,0);
   mctx.drawImage(worldBg,x0*sc,y0*sc,W/zoom*sc,H/zoom*sc,0,0,W,H);
   if(terrDirty||!terrCv)buildTerritory();
-  mctx.imageSmoothingEnabled=true;mctx.drawImage(terrCv,x0/TS,y0/TS,W/zoom/TS,H/zoom/TS,0,0,W,H);
+  mctx.imageSmoothingEnabled=true;mctx.imageSmoothingQuality='high';mctx.drawImage(terrCv,x0/TS,y0/TS,W/zoom/TS,H/zoom/TS,0,0,W,H);
+  const dusk=Math.max(0,Math.min(1,(G.dayP-.46)/.12));
+  if(dusk){mctx.fillStyle=`rgba(19,27,62,${dusk*.49})`;mctx.fillRect(0,0,W,H);}
   const k=Math.max(.7,Math.min(1.5,zoom*.7));
+  drawTravelers(mctx,k);
   for(const t of G.towns){const[x,y]=w2s(t.x,t.y);if(x<-60||y<-60||x>W+60||y>H+60)continue;drawTownAt(mctx,t,x,y,k,true);}
   if(G.tx!=null){const[x,y]=w2s(G.tx,G.ty);const[px,py]=w2s(G.x,G.y);mctx.strokeStyle='rgba(240,210,120,.8)';mctx.setLineDash([4,4]);mctx.lineWidth=1.5;
     mctx.beginPath();mctx.moveTo(px,py);mctx.lineTo(x,y);mctx.stroke();mctx.setLineDash([]);mctx.beginPath();mctx.arc(x,y,5,0,7);mctx.stroke();}
@@ -410,6 +418,8 @@ function drawMap(){
 function renderHud(){
   const wnd=armyCount()-fitCount();
   const st=(ic,v,l)=>`<div class="stat"><svg class="ic"><use href="#i-${ic}"/></svg><b>${v}</b><span>${l}</span></div>`;
+  const hour=(Math.floor(G.dayP*24)+6)%24;
+  const clock=$('#worldClock');if(clock)clock.textContent=`${isNight()?'☾ กลางคืน':'☀ กลางวัน'} · ${String(hour).padStart(2,'0')}:00`;
   $('#hud').innerHTML=st('day',G.day,'วัน')+st('coin',window.FX?FX.num('gold',G.gold):G.gold,'ทอง')+st('helm',`${fitCount()}/${limit()}`,wnd?`เจ็บ ${wnd}`:'ทหาร')+st('castle',myTowns().length,'เมือง')+st('chain',prisCount(),'เชลย')+st('tent',G.food,waiting>0?'ตั้งค่าย':'เสบียง')+st('star','Lv '+G.gen.lv,G.gen.pts?`แต้ม +${G.gen.pts}`:'แม่ทัพ');
   const order=pickPid!=null?'แตะเป้าหมายเพื่อสั่งทัพแยก':waiting>0?'กำลังตั้งค่ายพักแรม':G.tx!=null
     ?(G.tgt?.k==='t'?`กำลังเดินทัพไป ${G.tgt.n}`:G.tgt?'กำลังเดินทัพเข้าหาเป้าหมาย':'กำลังเดินทัพไปยังจุดที่เลือก')
@@ -444,9 +454,9 @@ mcv.addEventListener('lostpointercapture',clearMapDrag);
 function mapMarker(x,y){
   const scale=Math.max(.7,Math.min(1.5,zoom*.7));
   let hit=null,best=Infinity;
-  for(const [kind,items] of [['p',G.parties],['b',G.bandits],['a',G.armies],['t',G.towns]])for(const item of items){
+  for(const [kind,items] of [['p',G.parties],['b',G.bandits],['a',G.armies],['t',G.towns],['c',G.caves],['q',G.caravans]])for(const item of items){
     const [sx,sy]=w2s(item.x,item.y),dx=x-sx,dy=y-sy;
-    const marker=kind==='t'
+    const marker=kind==='t'||kind==='c'
       ?Math.min(Math.hypot(dx,dy+10*scale),Math.hypot(Math.max(0,Math.abs(dx)-22*scale),dy-10*scale))
       :Math.min(Math.hypot(dx,dy),Math.hypot(dx-4*scale,dy+28*scale));
     if(marker<=18&&marker<best){hit={kind,item};best=marker;}
@@ -459,6 +469,7 @@ mcv.addEventListener('pointerup',e=>{if(drag?.id!==e.pointerId)return;const d=dr
   const [wx,wy]=s2w(x,y),hit=mapMarker(x,y);
   if(pickPid!=null){handlePick(wx,wy,hit);return;}
   if(hit?.kind==='p'){openParty(hit.item);return;}
+  if(hit?.kind==='q'){openConvoy(hit.item);return;}
   if(!hit&&!onLand(wx,wy)){toast('ตรงนั้นเป็นทะเล เดินไปไม่ได้');return;}
   camFree=false;waiting=0;G.path=null;
   G.tgt=hit?(hit.kind==='t'?{k:'t',n:hit.item.n}:{k:hit.kind,id:hit.item.id}):null;
@@ -468,14 +479,24 @@ function setMapZoom(value){zoom=Math.max(.45,Math.min(3.2,value));$('#zIn').disa
 $('#zIn').onclick=()=>setMapZoom(zoom*1.3);
 $('#zOut').onclick=()=>setMapZoom(zoom/1.3);
 $('#zHome').onclick=()=>{cam={x:G.x,y:G.y};camFree=false;};
+mcv.addEventListener('wheel',e=>{
+  if(!G||sheetOpen()||e.deltaY===0)return;
+  e.preventDefault();
+  const r=mcv.getBoundingClientRect(),x=(e.clientX-r.left)*mcv.width/(r.width*mdpr),y=(e.clientY-r.top)*mcv.height/(r.height*mdpr);
+  const [wx,wy]=s2w(x,y);
+  setMapZoom(zoom*(e.deltaY<0?1.15:1/1.15));
+  const [nx,ny]=s2w(x,y);cam.x+=wx-nx;cam.y+=wy-ny;camFree=true;
+},{passive:false});
 
 /* ---- time passes only while travelling or camping ---- */
 // speed depends on what the party is made of: horsemen are fast, men on foot are slow, big columns are slower still
 function speedOf(list,cavExtra,footExtra){let foot=footExtra||0,cav=cavExtra||0;
   for(const e of list){const n=e.n-(e.w||0);if(TROOPS[e.id].type==='cav')cav+=n;else foot+=n;}
   const tot=Math.max(1,foot+cav);return (38+cav/tot*20)/(1+tot/90);}
-const pSpeed=()=>speedOf(G.army,1,prisCount()*.5);
-const partySpeed=o=>speedOf(o.troops,0,0)*(o.fleeing?.72:1);
+const isNight=()=>G.dayP>=.5;
+const worldPace=()=>.38*(isNight()?.57:1);
+const pSpeed=()=>speedOf(G.army,1,prisCount()*.5)*worldPace();
+const partySpeed=o=>speedOf(o.troops,0,0)*worldPace()*(o.fleeing?.66:1);
 /* coarse land grid for routing around the sea */
 const NS=10;let nav=null,NW=0,NH=0;
 function buildNav(){NW=Math.ceil(WORLD_W/NS);NH=Math.ceil(WORLD_H/NS);nav=new Uint8Array(NW*NH);
@@ -518,11 +539,13 @@ function mapStep(dt){
     const wp=G.path[0];
     if(stepToward(G,wp[0],wp[1],sp))G.path.shift();
     if(!G.path.length||Math.hypot(G.tx-G.x,G.ty-G.y)<1){const tg=G.tgt;G.tx=null;G.path=null;
-      if(tg&&tg.k==='t'){const t=G.towns.find(t=>t.n===tg.n);G.tgt=null;G.x=t.x;G.y=t.y;openTown(t);return;}}
+      if(tg&&tg.k==='t'){const t=G.towns.find(t=>t.n===tg.n);G.tgt=null;G.x=t.x;G.y=t.y;openTown(t);return;}
+      if(tg?.k==='c'){const cave=G.caves.find(c=>c.id===tg.id);G.tgt=null;if(cave){openCave(cave);return;}}}
     moving=true;}
   if(waiting>0){waiting-=dt;moving=true;if(waiting<=0)toast('พักแรมเสร็จแล้ว',1200);}
   if(!moving){for(const b of G.bandits)b.moving=false;for(const a of G.armies)a.moving=false;return;}
-  G.dayP+=dt/7;if(G.dayP>=1){G.dayP-=1;dailyTick();}
+  G.dayP+=dt/DAY_SECONDS;if(G.dayP>=1){G.dayP-=1;dailyTick();}
+  updateTravelers(dt);
   const pS=strength(G.army,G.gen.lv);
   for(const b of G.bandits){
     const bS=strength(b.troops,0),d=Math.hypot(G.x-b.x,G.y-b.y);b.cool-=dt;
@@ -593,6 +616,7 @@ function partiesStep(dt){
 }
 function dailyTick(){
   G.day++;const msgs=[];
+  produceAndTrade();
   const holdings=myTowns(),tax=holdings.reduce((a,t)=>a+townTax(t),0);if(tax)G.gold+=tax;
   G.food+=holdings.reduce((n,t)=>n+(t.farms||0)*12,0);
   const wage=G.army.concat(...G.parties.map(p=>p.troops)).reduce((a,e)=>a+e.n*TROOPS[e.id].wage,0);
@@ -636,7 +660,7 @@ $('#bWait').onclick=()=>{const wnd=armyCount()-fitCount(),eat=eatPerDay();
     <small class="muted">ระหว่างพัก ข้าศึกหรือโจรอาจบุกมาถึงค่ายได้ แตะแผนที่เมื่อไหร่ก็เลิกพักทันที</small>
     <div class="row">${[1,3,5,7].map(d=>`<button class="btn grow" data-camp="${d}" type="button" ${G.food<eat*d?'style="opacity:.6"':''}>${d} วัน</button>`).join('')}</div>
     <button class="btn" id="cpNo" type="button">ยกเลิก</button>`);
-  document.querySelectorAll('[data-camp]').forEach(b=>b.onclick=()=>{const d=+b.dataset.camp;closeSheet();waiting=d*7;G.tx=null;G.tgt=null;G.path=null;toast(`ตั้งค่ายพัก ${d} วัน`,1500);});
+  document.querySelectorAll('[data-camp]').forEach(b=>b.onclick=()=>{const d=+b.dataset.camp;closeSheet();waiting=d*DAY_SECONDS;G.tx=null;G.tgt=null;G.path=null;toast(`ตั้งค่ายพัก ${d} วัน`,1500);});
   $('#cpNo').onclick=closeSheet;};
 
 function shrink(list,f){for(const e of list){e.n=Math.max(0,Math.round(e.n*(1-f)));if(e.w>e.n)e.w=e.n;}prune(list);}
@@ -743,7 +767,7 @@ function bindShop(t){
     if(a==='militia'){if(G.gold<40)return toast('ทองไม่พอ');G.gold-=40;addTo(t.gar,'vil',5);return done('เกณฑ์ชาวเมือง 5 คนเฝ้าเมือง');}
   });
 }
-function openTown(t){
+function openTown(t,tab='overview'){
   const own=ownerOf(t),F=facOf(own),rel=relOf(own),fort=t.s!=='v';
   const hostile=rel==='war'||(t.raidedUntil||0)>G.day;const disc=(rel==='own'||rel==='ally')?.8:1;
   const rows=hostile?`<p class="muted" style="margin:0">ชาวเมืองไม่ยอมให้ศัตรูของ${F.short}จ้างคน</p>`:(Object.entries(t.stock).filter(([,n])=>n>0).map(([id,n])=>{const T=TROOPS[id],pr=Math.round(T.price*disc);
@@ -763,19 +787,31 @@ function openTown(t){
       mineHtml+=`<div class="list">${g}</div>${a?`<small class="muted">ฝากทหารไว้เฝ้าเมือง (ไม่ต้องจ่ายเงินเดือน)</small><div class="list">${a}</div>`:''}`;}}
   openSheet(`<div class="row town-heading"><canvas id="townPic" width="200" height="120" style="width:64px;height:auto;flex:none"></canvas><div class="grow" style="min-width:0"><h2>${t.n}</h2>
       <span class="muted" style="font-size:13px">${TOWN_KIND[t.s]} · ${chip(F.color)}${F.name}${rel!=='own'&&rel!=='ind'?` · ${REL_TXT[rel]}`:''}</span></div><button class="btn" id="tExitTop" type="button">กลับแผนที่</button></div>
+    <div class="town-scene" role="img" aria-label="ภาพเมืองสยามริมแม่น้ำ"><span>${TOWN_KIND[t.s]} · ทรัพยากร ${GOODS[t.resource].name}</span></div>
     <div class="muted" style="font-size:13.5px">ทอง ${G.gold} · ทหาร ${armyCount()}/${limit()} นาย</div>
+    <div class="town-tabs" aria-label="หน้าจัดการเมือง">${[['overview','เมืองและกองทัพ'],['trade','คลังและค้า'],...(own==='p'&&fort?[['develop','สร้างเมือง']]:[])].map(([id,label])=>`<button class="btn" type="button" data-town-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</div>
+    ${tab==='trade'?tradePanel(t,hostile):tab==='develop'?cityProjects(t):`
     ${t.s==='v'&&own!=='p'&&rel!=='ally'?`<div class="item"><div class="t"><b>ชาวบ้านพร้อมป้องกัน ${total(t.gar)} คน</b><small>${t.raidedUntil>G.day?`กำลังฟื้นตัวถึงวันที่ ${t.raidedUntil}`:'ต้องชนะการรบจึงจะปล้นได้'}</small></div>
       <button class="btn red" id="raidTown" type="button"${t.raidedUntil>G.day?' disabled':''}>บุกปล้น</button></div>`:''}
-    ${fortHtml}${mineHtml}${cityProjects(t)}
+    ${fortHtml}${mineHtml}
+    ${own==='p'&&fort?`<button class="btn" id="townPatrol" type="button"${total(t.gar)<5||G.caravans.some(c=>c.kind==='patrol'&&c.from===t.n)?' disabled':''}>ส่งทหารเฝ้าทางเข้าออกเมือง</button>`:''}
     <div class="sec">จ้างคนเข้ากองทัพ${disc<1&&!hostile?' (ลด 20%)':''}</div><div class="list">${rows}</div>
     ${townShop(t,hostile,own)}
     <div class="list">
       ${wnd&&!hostile?`<button class="btn" id="tRest" type="button">พักฟื้นในเมือง 1 วัน (รักษาทหารบาดเจ็บ ${wnd} คน)</button>`:''}
       ${fort&&ransom&&!hostile?`<button class="btn" id="tRansom" type="button">ส่งเชลยเรียกค่าไถ่ +${ransom} ทอง</button>`:''}
     </div>
-    <button class="btn gold" id="tLeave" type="button">ออกเดินทาง</button>`);
+    <button class="btn gold" id="tLeave" type="button">ออกเดินทาง</button>`}`);
   const tp=$('#townPic').getContext('2d');tp.scale(2,2);drawTownAt(tp,t,50,44,1.5,false);
-  document.querySelectorAll('[data-icon]').forEach(c=>troopIcon(c,c.dataset.icon));bindShop(t);bindCityProjects(t);
+  document.querySelectorAll('[data-town-tab]').forEach(b=>b.onclick=()=>openTown(t,b.dataset.townTab));
+  if(tab==='trade')bindTrade(t,hostile);
+  if(tab==='develop')bindCityProjects(t);
+  document.querySelectorAll('[data-icon]').forEach(c=>troopIcon(c,c.dataset.icon));bindShop(t);
+  const patrol=$('#townPatrol');if(patrol)patrol.onclick=()=>{
+    const point=[[42,0],[-42,0],[0,42],[0,-42]].map(([x,y])=>[t.x+x,t.y+y]).find(([x,y])=>segClear(t.x,t.y,x,y));
+    if(!point||!launchConvoy(t,t,null,0,'patrol',point)){toast('ส่งทหารตรวจเส้นทางไม่ได้');return;}
+    save();openTown(t);toast('ส่งทหารออกตรวจเส้นทางแล้ว');
+  };
   if($('#raidTown'))$('#raidTown').onclick=()=>{closeSheet();beginRaid(t);};
   document.querySelectorAll('[data-hire]').forEach(b=>b.onclick=()=>{const id=b.dataset.hire,T=TROOPS[id],pr=Math.round(T.price*disc);
     if(b.dataset.q==='gar'){const q=Math.min(t.stock[id],Math.floor(G.gold/pr));if(q<=0){toast('ทองไม่พอ');return;}G.gold-=q*pr;t.stock[id]-=q;addTo(t.gar,id,q);save();toast(`จ้าง${T.n} ${q} คนเฝ้าเมือง`);openTown(t);return;}
@@ -794,7 +830,8 @@ function openTown(t){
         <div class="row"><button class="btn grow" id="wNo" type="button">ไม่</button><button class="btn gold grow" id="wYes" type="button">ประกาศสงคราม</button></div>`);
       $('#wNo').onclick=()=>openTown(t);$('#wYes').onclick=()=>{closeSheet();beginSiege(t);};}
     else{closeSheet();beginSiege(t);}};
-  $('#tExitTop').onclick=$('#tLeave').onclick=()=>{closeSheet();const p=[[0,16],[16,0],[-16,0],[0,-16],[12,12],[-12,12]].map(([dx,dy])=>[G.x+dx,G.y+dy]).find(([x,y])=>onLand(x,y));if(p){G.x=p[0];G.y=p[1];}};
+  const leave=()=>{closeSheet();const p=[[0,16],[16,0],[-16,0],[0,-16],[12,12],[-12,12]].map(([dx,dy])=>[G.x+dx,G.y+dy]).find(([x,y])=>onLand(x,y));if(p){G.x=p[0];G.y=p[1];}};
+  $('#tExitTop').onclick=leave;if($('#tLeave'))$('#tLeave').onclick=leave;
 }
 function openArmy(){
   const g=G.gen,need=60*g.lv;
@@ -947,31 +984,169 @@ function openFoundTown(){
     if(!/^[ก-๙a-zA-Z0-9 -]{1,24}$/.test(n)||G.towns.some(t=>t.n===n)){toast('ใช้ชื่อไทย อังกฤษ หรือตัวเลข และเลือกชื่อที่ไม่ซ้ำ');return;}
     const reason=foundingBlock();if(reason){toast(reason);return;}
     const t={n,x:G.x,y:G.y,s:'c',own:'p',wall:0,gar:[{id:'vil',n:20,w:0}],stock:{},rs:G.day,founded:true};
-    G.gold-=FOUND_GOLD;G.food-=FOUND_FOOD;G.towns.push(t);restock(t);terrDirty=true;save();openTown(t);
+    G.gold-=FOUND_GOLD;G.food-=FOUND_FOOD;G.towns.push(t);initTrade(t);restock(t);terrDirty=true;save();openTown(t);
   };
 }
-const PROJECTS={market:{name:'ตลาด',cost:180,desc:'+30 ทองต่อวัน'},farms:{name:'ไร่นา',cost:140,desc:'+12 เสบียงต่อวัน'},barracks:{name:'โรงทหาร',cost:220,desc:'+70 ความจุทัพ'}};
+const GOODS={rice:{name:'ข้าว',price:4},wood:{name:'ไม้',price:8},stone:{name:'หิน',price:10},salt:{name:'เกลือ',price:9}};
+const STOCK_CAP=240,SHIP_SIZE=12;
+function initTrade(t){
+  if(!t.resource){
+    const lat=20.9-t.y/120,lon=97+t.x/120;
+    const coast=Array.from({length:8},(_,i)=>i*Math.PI/4).some(a=>!onLand(t.x+Math.cos(a)*32,t.y+Math.sin(a)*32));
+    t.resource=coast&&lat<15?'salt':mtnP(lat,lon)>=.5?'stone':forestP(lat,t.x)>=.3?'wood':'rice';
+  }
+  t.goods??=Object.fromEntries(Object.keys(GOODS).map(id=>[id,id===t.resource?42:10]));
+}
+function tradeAllowed(t){
+  const own=ownerOf(t);
+  return !(t.raidedUntil>G.day)&&G.rel[own]!=='war';
+}
+function tradeDestinations(t){
+  return G.towns.filter(d=>d!==t&&tradeAllowed(d)&&d.resource!==t.resource)
+    .sort((a,b)=>Math.hypot(a.x-t.x,a.y-t.y)-Math.hypot(b.x-t.x,b.y-t.y));
+}
+function makeRoute(a,b){
+  return segClear(a.x,a.y,b.x,b.y)?[[b.x,b.y]]:navPath(a.x,a.y,b.x,b.y);
+}
+function launchConvoy(t,d,id,n,kind,patrolPoint){
+  if(G.caravans.length>=14||G.caravans.some(c=>c.from===t.n&&c.kind===kind))return false;
+  const route=patrolPoint?[patrolPoint]:makeRoute(t,d);
+  if(!route?.length||(!patrolPoint&&Math.hypot(route.at(-1)[0]-d.x,route.at(-1)[1]-d.y)>2))return false;
+  if(id){if((t.goods[id]||0)<n)return false;t.goods[id]-=n;}
+  G.caravans.push({id:G.nextConvoy++,x:t.x,y:t.y,from:t.n,to:d.n,kind,good:id,n,path:route,returning:false});
+  return true;
+}
+function produceAndTrade(){
+  for(const t of G.towns){
+    if(t.raidedUntil>G.day)continue;
+    const amount=(t.s==='v'?8:12)+(t.resource==='rice'?(t.farms||0)*3:0);
+    if(t.goods[t.resource]<STOCK_CAP)t.goods[t.resource]=Math.min(STOCK_CAP,t.goods[t.resource]+amount);
+    if(t.s!=='v'&&G.day%2===0)for(const id of Object.keys(GOODS))if(id!==t.resource)t.goods[id]=Math.max(0,t.goods[id]-2);
+  }
+  if(G.day%2!==0||G.caravans.length>=10)return;
+  const candidates=G.towns.filter(t=>tradeAllowed(t)&&t.goods[t.resource]>=SHIP_SIZE*2&&!G.caravans.some(c=>c.from===t.n));
+  if(!candidates.length)return;
+  const t=candidates[G.day%candidates.length];
+  const d=tradeDestinations(t).find(x=>x.goods[t.resource]<STOCK_CAP-SHIP_SIZE&&Math.hypot(t.x-x.x,t.y-x.y)<210);
+  if(d)launchConvoy(t,d,t.resource,t.s==='v'?6:SHIP_SIZE,t.s==='v'?'villagers':'trade');
+}
+function updateTravelers(dt){
+  for(let i=G.caravans.length-1;i>=0;i--){
+    const c=G.caravans[i],wp=c.path[0];
+    if(wp&&stepToward(c,wp[0],wp[1],(c.kind==='patrol'?39:37)*worldPace()*dt))c.path.shift();
+    if(c.path.length)continue;
+    const a=G.towns.find(t=>t.n===c.from),b=G.towns.find(t=>t.n===c.to);
+    if(!a||!b){G.caravans.splice(i,1);continue;}
+    if(!c.returning){
+      if(c.good){
+        const n=Math.max(0,Math.min(c.n,STOCK_CAP-b.goods[c.good]));
+        b.goods[c.good]+=n;a.goods[c.good]+=c.n-n;
+        a.lastShipment={direction:'ส่งออก',other:b.n,good:c.good,n,day:G.day};
+        b.lastShipment={direction:'รับเข้า',other:a.n,good:c.good,n,day:G.day};
+        if(ownerOf(a)==='p'&&ownerOf(b)!=='p')G.gold+=n*GOODS[c.good].price;
+      }
+      c.returning=true;c.path=makeRoute(b,a)||[];
+      if(c.path.length)continue;
+    }
+    G.caravans.splice(i,1);save();
+  }
+}
+const CONVOY_NAME={villagers:'ชาวบ้านขนสินค้า',trade:'กองคาราวาน',patrol:'กองตรวจการณ์'};
+function openConvoy(c){
+  openSheet(`<h2>${CONVOY_NAME[c.kind]}</h2><p>${c.returning?`กำลังกลับ ${c.from}`:c.kind==='patrol'?`กำลังตรวจเส้นทางรอบ ${c.from}`:`${c.from} → ${c.to}`}</p>
+    ${c.good&&!c.returning?`<p>สินค้า ${GOODS[c.good].name} × ${c.n}</p>`:''}
+    <button class="btn" id="convoyClose" type="button">กลับแผนที่</button>`);
+  $('#convoyClose').onclick=closeSheet;
+}
+function drawTravelers(g,k){
+  for(const c of G.caravans){
+    const [x,y]=w2s(c.x,c.y);
+    if(x<-40||y<-50||x>mcv.width/mdpr+40||y>mcv.height/mdpr+50)continue;
+    const next=c.path[0]||[c.x,c.y],face=Math.atan2(next[1]-c.y,next[0]-c.x),run=performance.now()/90;
+    drawMan(g,x,y,k*.78,'blue',c.kind==='patrol'?'spr':c.kind==='trade'?'cav':'vil',{face,run,pal:palette('#b69c66')});
+    g.fillStyle='#ecd9a7';g.strokeStyle='#30281c';g.lineWidth=2;g.beginPath();g.arc(x,y-13*k,4*k,0,Math.PI*2);g.fill();g.stroke();
+  }
+  for(const c of G.caves){
+    const [x,y]=w2s(c.x,c.y);
+    if(x<-60||y<-40||x>mcv.width/mdpr+60||y>mcv.height/mdpr+40)continue;
+    g.fillStyle='#3d352d';g.beginPath();g.ellipse(x,y-5*k,10*k,7*k,0,Math.PI,0);g.lineTo(x+10*k,y);g.lineTo(x-10*k,y);g.closePath();g.fill();
+    g.fillStyle=c.clearDay>G.day?'#a19a86':'#171617';g.beginPath();g.arc(x,y-2*k,5*k,Math.PI,0);g.fill();
+    g.font=`600 ${Math.max(10,11*k)}px ${FONT()}`;g.textAlign='center';g.textBaseline='top';
+    g.strokeStyle='#1e1811';g.lineWidth=3;g.strokeText(c.n,x,y+5*k);g.fillStyle='#ebd6ad';g.fillText(c.n,x,y+5*k);
+  }
+}
+function openCave(cave){
+  const cleared=cave.clearDay>G.day,n=12+Math.min(36,Math.floor(G.day/2));
+  openSheet(`<h2>${cave.n}</h2><p>${cleared?`โจรยังไม่กลับมาจนถึงวันที่ ${cave.clearDay}`:`พบโจรภูเขา ${n} คนเฝ้าเสบียงและทองที่ปล้นมา`}</p>
+    <button class="btn red" id="caveFight" type="button"${cleared?' disabled':''}>บุกถ้ำโจร</button>
+    <button class="btn" id="caveClose" type="button">กลับแผนที่</button>`);
+  $('#caveClose').onclick=closeSheet;
+  $('#caveFight').onclick=()=>{
+    if(cleared)return;closeSheet();
+    beginBattle({kind:'cave',name:'โจรภูเขา',cave,troops:randomTroops(n,['b2','b3','b5','b5']),pal:BANDIT},{site:'hills'});
+  };
+}
+
+const PROJECTS={market:{name:'ตลาด',cost:180,good:'wood',n:8,desc:'+30 ทองต่อวัน'},
+  farms:{name:'ไร่นา',cost:140,good:'rice',n:8,desc:'+12 เสบียงต่อวัน'},
+  barracks:{name:'โรงทหาร',cost:220,good:'stone',n:8,desc:'+70 ความจุทัพ'}};
 function cityProjects(t){
   if(t.own!=='p'||t.s==='v')return '';
   const projects=Object.entries(PROJECTS).map(([id,p])=>{
-    const lv=t[id]||0,cost=p.cost*(lv+1);
-    return `<div class="item"><div class="t"><b>${p.name} · ขั้น ${lv}/3</b><small>${p.desc} ต่อขั้น</small></div>
-      <button class="btn" type="button" data-project="${id}"${lv>=3||G.gold<cost?' disabled':''}>${lv>=3?'เต็มขั้น':`สร้าง · ${cost} ทอง`}</button></div>`;
+    const lv=t[id]||0,cost=p.cost*(lv+1),n=p.n*(lv+1),block=lv>=3?'เต็มขั้น':G.gold<cost?'ทองไม่พอ':t.goods[p.good]<n?'วัสดุไม่พอ':'สร้าง';
+    return `<article class="city-project"><b>${p.name} · ${lv}/3</b><small>${p.desc} ต่อขั้น</small>
+      <small>${cost} ทอง + ${GOODS[p.good].name} ${n}</small><button class="btn" type="button" data-project="${id}"${block==='สร้าง'?'':' disabled'}>${block}</button></article>`;
   }).join('');
-  const promote=t.founded&&t.s==='c'?'<button class="btn gold" id="promoteTown" type="button">ยกค่ายเป็นเมืองป้อม · 800 ทอง / 120 เสบียง</button>':'';
-  return `<div class="sec">ผังพัฒนาเมือง</div><div class="list">${projects}${promote}</div>`;
+  const promote=t.founded&&t.s==='c'?'<button class="btn gold" id="promoteTown" type="button">ยกค่ายเป็นเมืองป้อม · 800 ทอง / 120 เสบียง / 25 หิน</button>':'';
+  return `<div class="sec">สร้างเมือง · ผังสำเร็จรูป</div><div class="city-projects">${projects}</div>${promote}`;
 }
 function bindCityProjects(t){
   document.querySelectorAll('[data-project]').forEach(button=>button.onclick=()=>{
-    const id=button.dataset.project,lv=t[id]||0,cost=PROJECTS[id].cost*(lv+1);
-    if(lv>=3||G.gold<cost)return;
-    G.gold-=cost;t[id]=lv+1;save();openTown(t);
+    const id=button.dataset.project,lv=t[id]||0,p=PROJECTS[id],cost=p.cost*(lv+1),n=p.n*(lv+1);
+    if(lv>=3||G.gold<cost||t.goods[p.good]<n)return;
+    G.gold-=cost;t.goods[p.good]-=n;t[id]=lv+1;save();openTown(t,'develop');
   });
   const promote=$('#promoteTown');if(!promote)return;
-  const ready=Object.keys(PROJECTS).every(id=>t[id]>0)&&G.gold>=800&&G.food>=120;
+  const ready=Object.keys(PROJECTS).every(id=>t[id]>0)&&G.gold>=800&&G.food>=120&&t.goods.stone>=25;
   promote.disabled=!ready;
   if(!ready)promote.insertAdjacentHTML('afterend','<small>ต้องมีตลาด ไร่นา และโรงทหารอย่างน้อยขั้น 1 พร้อมทรัพยากรครบ</small>');
-  promote.onclick=()=>{G.gold-=800;G.food-=120;t.s='k';t.wall=Math.max(1,t.wall);restock(t);terrDirty=true;save();openTown(t);};
+  promote.onclick=()=>{G.gold-=800;G.food-=120;t.goods.stone-=25;t.s='k';t.wall=Math.max(1,t.wall);restock(t);terrDirty=true;save();openTown(t,'develop');};
+}
+function tradePanel(t,hostile){
+  const mine=ownerOf(t)==='p',route=G.caravans.find(c=>c.from===t.n&&c.kind!=='patrol'),report=t.lastShipment;
+  const lines=Object.entries(GOODS).map(([id,g])=>{
+    const stock=t.goods[id],carry=G.goods[id]||0,buy=tradePrice(t,id),sell=Math.max(1,buy-2);
+    const receive=hostile||stock<1||(!mine&&G.gold<buy),send=hostile||carry<1||stock>=STOCK_CAP;
+    return `<div class="item trade-line"><div class="t"><b>${g.name}${id===t.resource?' · ผลิตในพื้นที่':''}</b>
+      <small>คลัง ${stock} · สัมภาระ ${carry}${mine?'':` · ซื้อ ${buy} / ขาย ${sell} ทอง`}</small></div>
+      <button class="btn" type="button" data-buy-good="${id}"${receive?' disabled':''}>${mine?'เบิก':'ซื้อ'}</button>
+      <button class="btn" type="button" data-sell-good="${id}"${send?' disabled':''}>${mine?'ฝาก':'ขาย'}</button></div>`;
+  }).join('');
+  const destinations=mine?tradeDestinations(t).slice(0,6):[];
+  return `<div class="sec">คลังสินค้าและการค้า</div><div class="list">${lines}</div>
+    ${report?`<small>${report.direction} ${GOODS[report.good].name} ${report.n} · ${report.other} · วันที่ ${report.day}</small>`:''}
+    ${route?`<small>${CONVOY_NAME[route.kind]} ${route.returning?'กำลังเดินทางกลับ':`กำลังส่งสินค้าไป ${route.to}`}</small>`:
+      destinations.length?`<label for="tradeDest">ส่ง ${GOODS[t.resource].name} ${SHIP_SIZE} หน่วยไปยัง</label><select id="tradeDest">${destinations.map(d=>`<option value="${G.towns.indexOf(d)}">${d.n}</option>`).join('')}</select>
+      <button class="btn gold" id="sendTrade" type="button"${t.goods[t.resource]<SHIP_SIZE?' disabled':''}>ส่งกองคาราวาน</button>`:''}`;
+}
+function tradePrice(t,id){
+  return Math.max(2,GOODS[id].price+(t.goods[id]<12?3:t.goods[id]>40?-2:0));
+}
+function bindTrade(t,hostile){
+  const mine=ownerOf(t)==='p';
+  document.querySelectorAll('[data-buy-good],[data-sell-good]').forEach(button=>button.onclick=()=>{
+    if(hostile)return;
+    const id=button.dataset.buyGood||button.dataset.sellGood,receive=!!button.dataset.buyGood,price=tradePrice(t,id);
+    const carry=G.goods[id]||0,stock=t.goods[id],unit=mine?0:receive?price:Math.max(1,price-2);
+    const available=receive?Math.min(stock,mine?Infinity:Math.floor(G.gold/unit)):Math.min(carry,STOCK_CAP-stock);
+    const n=Math.min(5,available);if(n<=0)return;
+    t.goods[id]+=receive?-n:n;G.goods[id]=carry+(receive?n:-n);G.gold+=n*unit*(receive?-1:1);save();openTown(t,'trade');
+  });
+  const send=$('#sendTrade');if(send)send.onclick=()=>{
+    const dest=G.towns[+$('#tradeDest').value];
+    if(!dest||!tradeAllowed(dest)||!launchConvoy(t,dest,t.resource,SHIP_SIZE,'trade')){toast('ส่งสินค้าไม่ได้ · ตรวจคลังและเส้นทาง');return;}
+    save();openTown(t,'trade');
+  };
 }
 function beginRaid(t){
   const own=ownerOf(t),fac=own&&own!=='ind'?own:null;
@@ -1524,13 +1699,16 @@ function resizeBoard(){
   const w=$('#wrap').clientWidth-6,hAvail=window.innerHeight*(window.innerWidth<760?.54:.72);
   cell=Math.max(12,Math.floor(Math.min(w/COLS,hAvail/ROWS,64)));dpr=window.devicePixelRatio||1;
   cv.width=cell*COLS*dpr;cv.height=cell*ROWS*dpr;cv.style.width=cell*COLS+'px';cv.style.height=cell*ROWS+'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);buildBg();window.FX&&FX.attach(cv,$('#wrap'));
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingQuality='high';buildBg();window.FX&&FX.attach(cv,$('#wrap'));
 }
 function buildBg(){
   bgCanvas=document.createElement('canvas');bgCanvas.width=cell*COLS*dpr;bgCanvas.height=cell*ROWS*dpr;
   const g=bgCanvas.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const W=cell*COLS,H=cell*ROWS,R=rng(7);
   g.fillStyle=siteId==='hills'?'#726a45':'#637049';g.fillRect(0,0,W,H);
   paintMaterial(g,'grass',0,0,W,H,170,.94);
+  if(fieldArt){
+    g.save();g.globalAlpha=.72;g.imageSmoothingQuality='high';g.drawImage(fieldArt,0,0,W,H);g.restore();
+  }
   for(let i=0;i<W*H/14;i++){const x=R()*W,y=R()*H,k=R();g.fillStyle=k<.45?'rgba(30,60,20,.28)':k<.85?'rgba(120,160,70,.22)':'rgba(170,160,90,.25)';g.fillRect(x,y,1+R()*2,1+R()*1.5);}
   for(let i=0;i<14;i++){const x=R()*W,y=R()*H;g.fillStyle='rgba(40,70,25,.18)';g.beginPath();g.ellipse(x,y,cell*(.6+R()),cell*(.4+R()*.6),R()*3,0,7);g.fill();}
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const x=c*cell,y=r*cell,t=ter(c,r);
@@ -1785,13 +1963,26 @@ function bakeCorpse(m){if(!dg)return;const x=m.x*cell,y=m.y*cell,s=cell/33;
   stain(x+(Math.cos(m.face)<0?1:-1)*5*s,y,s*(m.type==='cav'?9:6),.6);
   drawMan(dg,x,y,s,m.side,m.type,{face:m.face,mir:m.mir,skin:m.skin,dying:1,noShadow:true,pal:SIDE[m.side]});
   for(let i=0;i<2;i++)stain(x+(Math.random()-.5)*s*12,y+(Math.random()-.5)*s*5,s*1.6,.35);
-  const dir=Math.cos(m.face)<0?1:-1;for(let i=0;i<Math.min(5,m.arrows||0);i++)stuckArrow(x+dir*(2+Math.random()*7)*s,y-(Math.random()*2)*s);}
-function stuckArrow(x,y){if(!dg||isWater(Math.floor(x/cell),Math.floor(y/cell)))return;const k=cell/33,a=-1.57+(Math.random()-.5)*1.1,L=(5.5+Math.random()*2)*k,ex=x+Math.cos(a)*L,ey=y+Math.sin(a)*L;
-  dg.lineCap='round';dg.strokeStyle='rgba(0,0,0,.28)';dg.lineWidth=1.1*k;line(dg,x,y,x+L*.75,y-L*.12);
-  dg.fillStyle='rgba(60,40,20,.5)';dg.beginPath();dg.ellipse(x,y,1.1*k,.5*k,0,0,7);dg.fill();
-  dg.strokeStyle='#6a4a28';dg.lineWidth=.75*k;line(dg,x,y,ex,ey);
-  const c=Math.cos(a),s_=Math.sin(a);dg.fillStyle='#ece6d4';dg.beginPath();dg.moveTo(ex,ey);dg.lineTo(ex-c*2.2*k-s_*1*k,ey-s_*2.2*k+c*1*k);dg.lineTo(ex-c*.6*k,ey-s_*.6*k);dg.lineTo(ex-c*2.2*k+s_*1*k,ey-s_*2.2*k-c*1*k);dg.closePath();dg.fill();
-  dg.fillStyle='#b23a2a';dg.fillRect(ex-c*1.2*k-.4*k,ey-s_*1.2*k-.4*k,.8*k,.8*k);}
+  const dir=Math.cos(m.face)<0?1:-1;for(let i=0;i<Math.min(5,m.arrows||0);i++)stuckArrow(x+dir*(2+Math.random()*7)*s,y-(Math.random()*2)*s,m.lastProjectile);}
+function drawArrowShape(g,x,y,angle,k,type){
+  const spear=type==='jav',size=spear?12:type==='xbow'?6:9;
+  g.save();g.translate(x,y);g.rotate(angle);g.scale(k,k);
+  g.strokeStyle='#211914';g.lineWidth=spear?1.25:.9;line(g,-size,0,-.7,0);
+  g.fillStyle='#8c8c80';g.beginPath();g.moveTo(0,0);g.lineTo(-2,-.9);g.lineTo(-1.55,0);g.lineTo(-2,.9);g.closePath();g.fill();
+  if(!spear){g.fillStyle='#d0c0a1';g.beginPath();g.moveTo(-size,0);g.lineTo(-size+2.9,-1.05);g.lineTo(-size+1.8,0);g.lineTo(-size+2.9,1.05);g.closePath();g.fill();}
+  g.restore();
+}
+function stuckArrow(x,y,type,angle){
+  if(!dg||isWater(Math.floor(x/cell),Math.floor(y/cell)))return;
+  const k=Math.max(.72,cell/33);
+  dg.strokeStyle='rgba(0,0,0,.25)';dg.lineWidth=k;line(dg,x,y,x+4*k,y+1*k);
+  drawArrowShape(dg,x,y,angle??(1.57+(Math.random()-.5)*.8),k,type);
+}
+function arrowPose(a,k){
+  const dx=a.x1-a.x0,dy=a.y1-a.y0;
+  const height=(4*k*(1-k)*a.h+.30*(1-k));
+  return [(a.x0+dx*k)*cell,(a.y0+dy*k-height)*cell,Math.atan2(dy-4*(1-2*k)*a.h+.30,dx)];
+}
 function burst(x,y,n,dirx,diry){if(!B)return;for(let i=0;i<n&&B.parts.length<700;i++){const sp=.4+Math.random()*1.1;
   B.parts.push({k:'blood',x,y,z:cell*.2+Math.random()*cell*.12,vx:(dirx*.8+(Math.random()-.5)*1.6)*sp,vy:(diry*.8+(Math.random()-.5)*1.2)*sp,vz:Math.random()*1.8+.4,sz:.8+Math.random()*1.4});}}
 function sparks(x,y,wood){if(!B)return;for(let i=0;i<(wood?6:4);i++)B.parts.push({k:wood?'chip':'spark',x,y,z:cell*.25,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*2,vz:Math.random()*2.5,life:1});}
@@ -1878,10 +2069,12 @@ function addBattleGroups(groups){
     const gs=G.gen.st,isG=p.tid==='gen',isO=p.tid==='off',mine=p.side==='blue'&&!isG&&!isO,oo=isO&&offById(p.oid);
     const T=isO?{hp:(1+oo.lv*.06)*(1+.15*oo.st.end),atk:offMul(oo)*(1+.08*oo.st.str)}:isG?{hp:(1+G.gen.lv*.07)*(1+.15*gs.end)*(1+.15*G.gear.arm),atk:(1+G.gen.lv*.05)*(1+.12*gs.str)*(1+.12*G.gear.wpn)}:TROOPS[p.tid];
     const dr=mine?(G.drill[drillKey(p.type)]||0):0,hpM=1+.06*dr,atkX=(1+.06*dr)*(mine?1+.1*G.eq.wpn:1);
+    const civilian=p.tid==='vil',tier=T.tier||3;
+    const training=civilian?1:1+(tier-2)*.08;
     const arm=Math.min(.78,(ARMOR[p.tid]||0)+(mine?G.eq.arm*.1:0)+(isG?G.gear.arm*.08:0));
     slotsFor(p).forEach(sl=>{const st=MS[p.type];
       const m={id:B.men.length,reg:ri,side:p.side,type:p.type,tid:p.tid,x:p.c+.5+sl[0],y:p.r+.6+sl[1],vx:0,vy:0,
-        hp:st.hp*T.hp*hpM*(.9+Math.random()*.2),atkM:T.atk*atkX,arm,sta:1,wound:0,guard:false,arrows:0,spdM:isG?1+.08*G.gear.horse:1,face:p.side==='blue'?Math.PI:0,mir:R()<.5?-1:1,skin:Math.floor(R()*4),
+        hp:st.hp*T.hp*hpM*training*(.9+Math.random()*.2),atkM:T.atk*atkX*training,arm,sta:1,wound:0,guard:false,arrows:0,spdM:isG?1+.08*G.gear.horse:1,face:p.side==='blue'?Math.PI:0,mir:R()<.5?-1:1,skin:Math.floor(R()*4),
         tgt:null,rt:Math.random()*.4,cd:Math.random()*.8,swing:-1,pend:null,aim:-1,wp:null,pathT:0,charge:0,run:0,
         alive:true,dying:-1,flash:0,fight:false,moving:false,react:Math.random()*.6};
       m.max=m.hp;B.men.push(m);reg.men.push(m);});
@@ -2062,7 +2255,7 @@ function step(dt,fast){
       const winning=mine>=theirs*1.4,shaken=g.side==='blue'&&B.genDown,tier=TROOPS[g.tid].tier;
       let steady=1;if(g.side==='blue'){steady=Math.max(.35,1-G.gen.st.lead*.08);if(B.men.some(x=>x.alive&&x.side==='blue'&&(x.tid==='gen'||x.tid==='off')&&Math.hypot(x.x-cx,x.y-cy)<(x.tid==='gen'?3.4:2.5)))steady*=.5;}
       if(g.rout){if((near===0&&Math.random()<.45)||(winning&&near<=al.length)){g.rout=false;g.eng=true;g.rallied=(g.rallied||0)+1;if(!fast){log(`${regName(g)} รวมพลกลับเข้าสู้!`);fxText(cx,cy-.5,'รวมพล!');}}}
-      else{const thr=shaken?.55:.34,ch=(g.type==='shd'?.1:.28)*(1.25-tier*.15)*(shaken?1.5:1)*steady;
+      else{const civilian=g.tid==='vil',thr=civilian?.72:shaken?.55:.34,ch=(civilian?.72:g.type==='shd'?.1:.28)*(1.25-tier*.15)*(shaken?1.5:1)*steady;
         if(!winning&&near>al.length*.6&&(g.rallied||0)<2&&((f<thr&&Math.random()<ch)||(al.length<=1&&Math.random()<.35))){g.rout=true;
           for(const m of al){m.swing=-1;m.pend=null;m.aim=-1;}
           if(!fast){log(`${regName(g)} ขวัญแตก หนีตาย!`);fxText(cx,cy-.5,'แตกทัพ!');sfx('rout',cx);}}}}}
@@ -2081,13 +2274,13 @@ function step(dt,fast){
     for(const e of B.men){if(!e.alive||e.side===a.side)continue;const d=Math.hypot(e.x-a.x1,e.y-a.y1);if(d<hd){hd=d;hit=e;}if(d<.9)B.regs[e.reg].arrowT=B.time;}
     if(hit){const ux=a.x1-a.x0,uy=a.y1-a.y0,uL=Math.hypot(ux,uy)||1,facing=-(Math.cos(hit.face)*ux+Math.sin(hit.face)*uy)/uL;
       if(hit.guard&&facing>-.2&&Math.random()<SHIELD[hit.type]){if(!fast){B.parts.push({k:'chip',x:hit.x*cell,y:(hit.y-.3)*cell,z:2,vx:(Math.random()-.5),vy:-.3,vz:1.2,life:1});sfx('thud',hit.x);}
-        if(Math.random()<.5)stuckArrow((hit.x+(Math.random()-.5)*.35)*cell,(hit.y+.05+Math.random()*.15)*cell);return false;}
+        if(Math.random()<.5)stuckArrow((hit.x+(Math.random()-.5)*.35)*cell,(hit.y+.05+Math.random()*.15)*cell,a.src.type);return false;}
       const tt=terAt(hit.x,hit.y);const mult=(.8+Math.random()*.4)*a.src.atkM*(hit.type==='shd'?.5:1)*(tt==='f'?.5:1)*(tt==='h'?.8:1)*(tt==='W'?.55:1)*(ART[hit.type]?.3:1);
       const glance=Math.random()<(hit.arm||0)*.55;
       let ad=(a.src.type==='xbow'?24:a.src.type==='jav'?21:16)*mult*(glance?.2:1);if(!glance&&Math.random()<(hit.type==='shd'?.06:MOUNT[hit.type]||ART[hit.type]?.08:.24))ad=hit.hp+1;
-      if(!glance)hit.arrows++;else if(!fast){sparks(hit.x*cell,(hit.y-.3)*cell);stuckArrow((hit.x+(Math.random()-.5)*.4)*cell,(hit.y+.1)*cell);}
+      if(!glance){hit.arrows++;hit.lastProjectile=a.src.type;}else if(!fast){sparks(hit.x*cell,(hit.y-.3)*cell);stuckArrow((hit.x+(Math.random()-.5)*.4)*cell,(hit.y+.1)*cell,a.src.type);}
       hurt(hit,ad,a.src,{x:Math.sign(a.x1-a.x0)*.3,y:Math.sign(a.y1-a.y0)*.3},fast,0,glance);}
-    else stuckArrow(a.x1*cell,a.y1*cell);return false;});
+    else if(!fast)stuckArrow(a.x1*cell,a.y1*cell,a.src.type,arrowPose(a,1)[2]);return false;});
   B.balls=B.balls.filter(b=>{b.t+=dt;if(b.t<b.dur)return true;ballImpact(b,fast);return false;});
   stepRolls(dt,fast);
   // blood keeps pooling under the fallen for a few seconds
@@ -2145,9 +2338,10 @@ function drawBattle(now){
     drawMan(ctx,m.x*cell,(m.y-(ch?Math.abs(Math.sin(t*6+m.id))*.07:0))*cell,s,m.side,m.type,{face:m.face,mir:m.mir,skin:m.skin,pal:SIDE[m.side],run:m.moving?m.run:0,swing:ch?((t*1.6+m.id*.37)%1<.5?.05:.2):m.swing,aim:m.aim,recoil:m.recoil,
       ready:ch||m.fight||(MOUNT[m.type]&&m.charge>.3)||(m.tgt&&m.tgt.alive&&dist(m,m.tgt)<1.2),dying:m.alive?-1:m.dying,guard:m.alive&&m.guard,wound:m.wound,
       flag:m.alive&&g.bearer===m?(g.rout?'rout':!g.eng?'hold':'side'):null,t});}
-  for(const a of B.arrows){const k=a.t/a.dur;const x=(a.x0+(a.x1-a.x0)*k)*cell,yb=(a.y0+(a.y1-a.y0)*k)*cell,h=Math.sin(k*Math.PI)*a.h*cell+cell*.3*(1-k);
-    const y=yb-h,dx=(a.x1-a.x0)*cell,dy=(a.y1-a.y0)*cell-Math.cos(k*Math.PI)*Math.PI*a.h*cell+cell*.3,L=Math.hypot(dx,dy)||1;
-    const length=a.src.type==='jav'?12:a.src.type==='xbow'?5:8;ctx.strokeStyle='#171511';ctx.lineWidth=a.src.type==='jav'?2:1.5;ctx.beginPath();ctx.moveTo(x-dx/L*length,y-dy/L*length);ctx.lineTo(x,y);ctx.stroke();}
+  for(const a of B.arrows){
+    const [x,y,angle]=arrowPose(a,a.t/a.dur);
+    drawArrowShape(ctx,x,y,angle,Math.max(.78,cell/33),a.src.type);
+  }
   for(const b of B.balls){const k=b.t/b.dur;const x=(b.x0+(b.x1-b.x0)*k)*cell,yb=(b.y0+(b.y1-b.y0)*k)*cell,h=Math.sin(k*Math.PI)*b.h*cell+cell*.15*(1-k);
     const br=b.stone?cell*.075:cell*.045;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(x,yb,br,br*.5,0,0,7);ctx.fill();ctx.fillStyle=b.stone?'#857e70':'#1a1a1a';ctx.beginPath();ctx.arc(x,yb-h,br,0,7);ctx.fill();if(b.stone){ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1;ctx.stroke();}}
   for(const r of B.rolls){ctx.fillStyle='#1a1a1a';ctx.beginPath();ctx.arc(r.x*cell,r.y*cell-cell*.03,cell*.04,0,7);ctx.fill();if(Math.random()<.4)dust(r.x*cell,r.y*cell);}
@@ -2201,6 +2395,7 @@ function battleResult(){
     const loot=Math.round(foeS*7*rnd(.8,1.25))+(foe.kind==='town'?(foe.town.s==='k'?300:120):0);G.gold+=loot;const food=Math.round(foeS*.5)+ri(2,6);G.food+=food;
     for(const o of G.officers.filter(offFree))offXp(o,Math.round(foeS*3));
     G.gen.xp+=Math.round(foeS*6);let lvUp=false;while(G.gen.xp>=60*G.gen.lv){G.gen.xp-=60*G.gen.lv;G.gen.lv++;G.gen.pts+=2;lvUp=true;}
+    if(foe.kind==='cave')foe.cave.clearDay=G.day+6;
     if(foe.kind==='raid'){foe.town.raidedUntil=G.day+4;foe.town.stock={};}
     if(foe.kind==='bandit')G.bandits=G.bandits.filter(x=>x!==foe.ref);
     if(foe.kind==='army'||foe.kind==='defend')G.armies=G.armies.filter(x=>x!==foe.ref);
@@ -2256,7 +2451,7 @@ function backToMap(){phase='none';B=null;battleFoe=null;SG=null;if($('#rBack2'))
    ===================================================================== */
 let lastT=0;
 function loop(now){
-  const dtReal=Math.min(.05,(now-(lastT||now))/1000);lastT=now;
+  const dtReal=Math.max(0,Math.min(.05,(now-(lastT||now))/1000));lastT=now;
   try{
     if(G&&!$('#mapScreen').hidden){if(!sheetOpen())mapStep(dtReal);drawMap();if(Math.floor(now/120)!==loop.h){loop.h=Math.floor(now/120);renderHud();}}
     if(!$('#battleScreen').hidden){
@@ -2286,6 +2481,9 @@ terrainImage.onload=()=>{
   if(phase!=='none')buildBg();
 };
 terrainImage.src='./terrain.webp';
+const fieldImage=new Image();
+fieldImage.onload=()=>{fieldArt=fieldImage;if(phase!=='none')buildBg();};
+fieldImage.src='./field.webp';
 showTitle();
 if(document.fonts)document.fonts.ready.then(()=>{if(!$('#titleScreen').hidden){flagPreview($('#flagPrev'),pickColor,pickEm);drawTitleArt();}});
 requestAnimationFrame(loop);

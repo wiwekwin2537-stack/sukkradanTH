@@ -11,6 +11,8 @@ const routes = new Map([
   ['/', game],
   ['/index.html', game],
   ['/terrain.webp', asset('terrain.webp', 'image/webp')],
+  ['/town.webp', asset('town.webp', 'image/webp')],
+  ['/field.webp', asset('field.webp', 'image/webp')],
   ['/healthz', { body: Buffer.from('ok\n'), type: 'text/plain; charset=utf-8' }],
 ]);
 
